@@ -5,9 +5,13 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
-from typing import Any, Dict, Iterable, List
+from typing import Any, Dict, List
 
 from .schema import Artifact, BusinessRule, Entity, Evidence, KnowledgeDocument, Relationship
+
+
+class MetadataLoadError(ValueError):
+    """Raised when a parser metadata file cannot be consumed as JSON."""
 
 
 def stable_id(prefix: str, *parts: object) -> str:
@@ -17,7 +21,28 @@ def stable_id(prefix: str, *parts: object) -> str:
 
 
 def load_json(path: Path) -> Dict[str, Any]:
-    return json.loads(path.read_text(encoding="utf-8"))
+    """Load one metadata JSON file and fail with a useful file-level error."""
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise MetadataLoadError(f"Cannot read metadata file: {path}: {exc}") from exc
+
+    if not text.strip():
+        raise MetadataLoadError(f"Metadata file is empty: {path}")
+
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise MetadataLoadError(
+            f"Metadata file contains invalid JSON: {path}: {exc}"
+        ) from exc
+
+    if not isinstance(data, dict):
+        raise MetadataLoadError(
+            f"Metadata root must be a JSON object: {path}"
+        )
+
+    return data
 
 
 def normalize_file(path: Path, source_type: str) -> KnowledgeDocument:
@@ -50,7 +75,12 @@ def normalize_file(path: Path, source_type: str) -> KnowledgeDocument:
         )
         return entity_id
 
-    def add_relationship(source_id: str, relationship_type: str, target_id: str, properties: Dict[str, Any] | None = None) -> None:
+    def add_relationship(
+        source_id: str,
+        relationship_type: str,
+        target_id: str,
+        properties: Dict[str, Any] | None = None,
+    ) -> None:
         relationships.append(
             Relationship(
                 id=stable_id("rel", source_id, relationship_type, target_id),
@@ -62,7 +92,6 @@ def normalize_file(path: Path, source_type: str) -> KnowledgeDocument:
             )
         )
 
-    # Artifact itself is the root entity for cross-source tracing.
     artifact_entity_id = add_entity(
         "ARTIFACT",
         path.stem,
@@ -113,7 +142,11 @@ def normalize_file(path: Path, source_type: str) -> KnowledgeDocument:
             else:
                 name = str(file_item)
             if name:
-                file_id = add_entity("FILE", str(name), file_item if isinstance(file_item, dict) else {})
+                file_id = add_entity(
+                    "FILE",
+                    str(name),
+                    file_item if isinstance(file_item, dict) else {},
+                )
                 add_relationship(program_id, "USES", file_id)
 
         for variable in data.get("variables", []):
@@ -143,16 +176,28 @@ def normalize_file(path: Path, source_type: str) -> KnowledgeDocument:
             else:
                 name = str(task)
             if name:
-                task_id = add_entity("SSIS_TASK", str(name), task if isinstance(task, dict) else {})
+                task_id = add_entity(
+                    "SSIS_TASK",
+                    str(name),
+                    task if isinstance(task, dict) else {},
+                )
                 add_relationship(package_id, "CONTAINS", task_id)
 
         for connection in data.get("connections", []):
             if isinstance(connection, dict):
-                name = connection.get("name") or connection.get("connection_name") or connection.get("id")
+                name = (
+                    connection.get("name")
+                    or connection.get("connection_name")
+                    or connection.get("id")
+                )
             else:
                 name = str(connection)
             if name:
-                connection_id = add_entity("CONNECTION", str(name), connection if isinstance(connection, dict) else {})
+                connection_id = add_entity(
+                    "CONNECTION",
+                    str(name),
+                    connection if isinstance(connection, dict) else {},
+                )
                 add_relationship(package_id, "USES_CONNECTION", connection_id)
 
         for rel in data.get("relationships", []):
@@ -173,38 +218,3 @@ def normalize_file(path: Path, source_type: str) -> KnowledgeDocument:
         evidence=evidence,
         business_rules=business_rules,
     )
-
-
-def normalize_directory(input_dir: Path, output_file: Path) -> KnowledgeDocument:
-    merged = KnowledgeDocument()
-
-    source_patterns = {
-        "sql": "*.json",
-        "cobol": "*_metadata.json",
-        "ssis": "*_metadata.json",
-    }
-
-    for source_type, pattern in source_patterns.items():
-        for path in sorted((input_dir / source_type).glob(pattern)) if (input_dir / source_type).exists() else []:
-            if path.name == "semantic_data.json":
-                continue
-            doc = normalize_file(path, source_type)
-            merged.artifacts.extend(doc.artifacts)
-            merged.entities.extend(doc.entities)
-            merged.relationships.extend(doc.relationships)
-            merged.evidence.extend(doc.evidence)
-            merged.business_rules.extend(doc.business_rules)
-
-    # De-duplicate entities and relationships by IDs.
-    merged.artifacts = list({item.id: item for item in merged.artifacts}.values())
-    merged.entities = list({item.id: item for item in merged.entities}.values())
-    merged.relationships = list({item.id: item for item in merged.relationships}.values())
-    merged.evidence = list({item.id: item for item in merged.evidence}.values())
-    merged.business_rules = list({item.id: item for item in merged.business_rules}.values())
-
-    output_file.parent.mkdir(parents=True, exist_ok=True)
-    output_file.write_text(
-        merged.model_dump_json(indent=2),
-        encoding="utf-8",
-    )
-    return merged

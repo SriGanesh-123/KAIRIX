@@ -37,6 +37,12 @@ def main() -> None:
         action="store_true",
         help="Skip Gemini and run the deterministic baseline only.",
     )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=0,
+        help="Review only the first N artifacts with Gemini (0 = all). Useful for testing free-tier limits.",
+    )
     args = parser.parse_args()
 
     if not CANONICAL_PATH.exists():
@@ -44,6 +50,17 @@ def main() -> None:
 
     _load_dotenv(PROJECT_ROOT / ".env")
     canonical = load_canonical(CANONICAL_PATH)
+
+    if args.limit < 0:
+        raise SystemExit("--limit must be >= 0")
+    if args.limit:
+        canonical = dict(canonical)
+        canonical["artifacts"] = canonical.get("artifacts", [])[: args.limit]
+        allowed = {item["id"] for item in canonical["artifacts"]}
+        for key in ("entities", "relationships", "evidence", "business_rules"):
+            canonical[key] = [
+                item for item in canonical.get(key, []) if item.get("artifact_id") in allowed
+            ]
 
     reviewer = None
     if not args.deterministic:

@@ -1,0 +1,578 @@
+{
+    "file": "POLLOAD.CBL",
+    "root": "start",
+    "has_errors": true,
+    "divisions": [
+        {
+            "type": "identification_division",
+            "text": "IDENTIFICATION DIVISION.\r\n       PROGRAM-ID. POLLOAD.",
+            "start_line": 8
+        },
+        {
+            "type": "environment_division",
+            "text": "ENVIRONMENT DIVISION.\r\n\r\n       INPUT-OUTPUT SECTION.\r\n\r\n       FILE-CONTROL.\r\n\r\n           SELECT POLICY-IN\r\n               ASSIGN TO POLIN\r\n               ORGANIZATION IS LINE SEQUENTIAL\r\n               FILE STATUS IS WS-IN-STATUS.\r\n\r\n           SELECT POLICY-MASTER\r\n               ASSIGN TO POLYMAST\r\n               ORGANIZATION IS INDEXED\r\n               ACCESS MODE IS DYNAMIC\r\n               RECORD KEY IS POLICY-NUMBER\r\n               FILE STATUS IS WS-VSAM-STATUS.",
+            "start_line": 11
+        },
+        {
+            "type": "data_division",
+            "text": "DATA DIVISION.\r\n\r\n       FILE SECTION.\r\n\r\n       FD  POLICY-IN.\r\n       01  POLICY-IN-REC.\r\n           05 PI-POLICY-NUMBER       PIC X(15).\r\n           05 PI-CUSTOMER-ID         PIC X(10).\r\n           05 PI-AGENT-ID            PIC X(10).\r\n           05 PI-PRODUCT-CODE        PIC X(10).\r\n           05 PI-POLICY-TYPE         PIC X(30).\r\n           05 PI-EFFECTIVE-DATE      PIC X(10).\r\n           05 PI-EXPIRATION-DATE     PIC X(10).\r\n           05 PI-CURRENT-STATUS      PIC X(20).\r\n           05 PI-PAYMENT-FREQUENCY   PIC X(20).\r\n           05 PI-POLICY-TERM         PIC 9(02).\r\n           05 PI-WRITTEN-PREMIUM     PIC 9(10)V99.\r\n           05 PI-EARNED-PREMIUM      PIC 9(10)V99.\r\n           05 PI-RENEWAL-DATE        PIC X(10).",
+            "start_line": 29
+        },
+        {
+            "type": "procedure_division",
+            "text": "PROCEDURE DIVISION.\r\n\r\n       MAIN-PROCESS.\r\n\r\n           PERFORM 1000-INITIALIZE\r\n\r\n           PERFORM UNTIL WS-EOF = 'Y'\r\n\r\n               PERFORM 2000-READ-INPUT\r\n\r\n               IF WS-EOF NOT = 'Y'\r\n                   PERFORM 3000-VALIDATE\r\n                   PERFORM 4000-WRITE-VSAM\r\n               END-IF\r\n\r\n           END-PERFORM\r\n\r\n           PERFORM 9000-CLOSE-FILES\r\n\r\n           STOP RUN.\r\n\r\n      *============================================================*\r\n      * INITIALIZATION\r\n      *============================================================*\r\n\r\n       1000-INITIALIZE.\r\n\r\n           DISPLAY 'POLLOAD STARTED'.\r\n\r\n           OPEN INPUT POLICY-IN\r\n\r\n           IF WS-IN-STATUS NOT = \"00\"\r\n               DISPLAY 'ERROR OPENING INPUT FILE'\r\n               DISPLAY 'STATUS = ' WS-IN-STATUS\r\n               STOP RUN\r\n           END-IF\r\n\r\n           OPEN OUTPUT POLICY-MASTER\r\n\r\n           IF WS-VSAM-STATUS NOT = \"00\"\r\n               DISPLAY 'ERROR OPENING VSAM FILE'\r\n               DISPLAY 'STATUS = ' WS-VSAM-STATUS\r\n               STOP RUN\r\n           END-IF.\r\n\r\n      *============================================================*\r\n      * READ INPUT\r\n      *============================================================*\r\n\r\n       2000-READ-INPUT.\r\n\r\n           READ POLICY-IN\r\n\r\n               AT END\r\n                   MOVE 'Y' TO WS-EOF\r\n\r\n               NOT AT END\r\n                   ADD 1 TO WS-READ-COUNT\r\n\r\n           END-READ.\r\n\r\n      *============================================================*\r\n      * VALIDATION\r\n      *============================================================*\r\n\r\n       3000-VALIDATE.\r\n\r\n           IF PI-POLICY-NUMBER = SPACES\r\n\r\n               DISPLAY 'INVALID POLICY NUMBER'\r\n\r\n               ADD 1 TO WS-ERROR-COUNT\r\n\r\n               GO TO 3000-EXIT\r\n\r\n           END-IF.\r\n\r\n      * Move Input Record to VSAM Record\r\n\r\n           MOVE PI-POLICY-NUMBER      TO POLICY-NUMBER\r\n           MOVE PI-CUSTOMER-ID        TO CUSTOMER-ID\r\n           MOVE PI-AGENT-ID           TO AGENT-ID\r\n           MOVE PI-PRODUCT-CODE       TO PRODUCT-CODE\r\n           MOVE PI-POLICY-TYPE        TO POLICY-TYPE\r\n           MOVE PI-EFFECTIVE-DATE     TO EFFECTIVE-DATE\r\n           MOVE PI-EXPIRATION-DATE    TO EXPIRATION-DATE\r\n           MOVE PI-CURRENT-STATUS     TO CURRENT-STATUS\r\n           MOVE PI-PAYMENT-FREQUENCY  TO PAYMENT-FREQUENCY\r\n           MOVE PI-POLICY-TERM        TO POLICY-TERM\r\n           MOVE PI-WRITTEN-PREMIUM    TO WRITTEN-PREMIUM\r\n           MOVE PI-EARNED-PREMIUM     TO EARNED-PREMIUM\r\n           MOVE PI-RENEWAL-DATE       TO RENEWAL-DATE.\r\n\r\n       3000-EXIT.\r\n           EXIT.\r\n\r\n      *============================================================*\r\n      * WRITE VSAM RECORD\r\n      *============================================================*\r\n\r\n       4000-WRITE-VSAM.\r\n\r\n           WRITE POLICY-MASTER-RECORD\r\n\r\n           INVALID KEY\r\n\r\n               DISPLAY 'DUPLICATE POLICY : '\r\n                       POLICY-NUMBER\r\n\r\n               ADD 1 TO WS-ERROR-COUNT\r\n\r\n           NOT INVALID KEY\r\n\r\n               ADD 1 TO WS-WRITE-COUNT\r\n\r\n           END-WRITE.\r\n\r\n      *============================================================*\r\n      * CLOSE FILES\r\n      *============================================================*\r\n\r\n       9000-CLOSE-FILES.\r\n\r\n           CLOSE POLICY-IN.\r\n\r\n           CLOSE POLICY-MASTER.\r\n\r\n           DISPLAY '-------------------------------------'.\r\n\r\n           DISPLAY 'TOTAL RECORDS READ    : '\r\n                    WS-READ-COUNT.\r\n\r\n           DISPLAY 'TOTAL RECORDS WRITTEN : '\r\n                    WS-WRITE-COUNT.\r\n\r\n           DISPLAY 'TOTAL ERRORS          : '\r\n                    WS-ERROR-COUNT.\r\n\r\n           DISPLAY 'POLLOAD COMPLETED'.\r\n\r\n           DISPLAY '-------------------------------------'.",
+            "start_line": 64
+        }
+    ],
+    "paragraphs": [
+        {
+            "text": "MAIN-PROCESS.",
+            "start_line": 66
+        },
+        {
+            "text": "1000-INITIALIZE.",
+            "start_line": 89
+        },
+        {
+            "text": "2000-READ-INPUT.",
+            "start_line": 113
+        },
+        {
+            "text": "3000-VALIDATE.",
+            "start_line": 129
+        },
+        {
+            "text": "3000-EXIT.",
+            "start_line": 157
+        },
+        {
+            "text": "4000-WRITE-VSAM.",
+            "start_line": 164
+        },
+        {
+            "text": "9000-CLOSE-FILES.",
+            "start_line": 185
+        },
+        {
+            "text": "END-IF.",
+            "start_line": 107
+        },
+        {
+            "text": "END-READ.",
+            "start_line": 123
+        },
+        {
+            "text": "EXIT.",
+            "start_line": 158
+        },
+        {
+            "text": "END-WRITE.",
+            "start_line": 179
+        }
+    ],
+    "records": [
+        {
+            "record_name": "POLICY-IN-REC",
+            "level": 1,
+            "start_line": 34,
+            "fields": [
+                {
+                    "name": "PI-POLICY-NUMBER",
+                    "level": 5,
+                    "picture": "X(15)",
+                    "start_line": 35
+                },
+                {
+                    "name": "PI-CUSTOMER-ID",
+                    "level": 5,
+                    "picture": "X(10)",
+                    "start_line": 36
+                },
+                {
+                    "name": "PI-AGENT-ID",
+                    "level": 5,
+                    "picture": "X(10)",
+                    "start_line": 37
+                },
+                {
+                    "name": "PI-PRODUCT-CODE",
+                    "level": 5,
+                    "picture": "X(10)",
+                    "start_line": 38
+                },
+                {
+                    "name": "PI-POLICY-TYPE",
+                    "level": 5,
+                    "picture": "X(30)",
+                    "start_line": 39
+                },
+                {
+                    "name": "PI-EFFECTIVE-DATE",
+                    "level": 5,
+                    "picture": "X(10)",
+                    "start_line": 40
+                },
+                {
+                    "name": "PI-EXPIRATION-DATE",
+                    "level": 5,
+                    "picture": "X(10)",
+                    "start_line": 41
+                },
+                {
+                    "name": "PI-CURRENT-STATUS",
+                    "level": 5,
+                    "picture": "X(20)",
+                    "start_line": 42
+                },
+                {
+                    "name": "PI-PAYMENT-FREQUENCY",
+                    "level": 5,
+                    "picture": "X(20)",
+                    "start_line": 43
+                },
+                {
+                    "name": "PI-POLICY-TERM",
+                    "level": 5,
+                    "picture": "9(02)",
+                    "start_line": 44
+                },
+                {
+                    "name": "PI-WRITTEN-PREMIUM",
+                    "level": 5,
+                    "picture": "9(10)V99",
+                    "start_line": 45
+                },
+                {
+                    "name": "PI-EARNED-PREMIUM",
+                    "level": 5,
+                    "picture": "9(10)V99",
+                    "start_line": 46
+                },
+                {
+                    "name": "PI-RENEWAL-DATE",
+                    "level": 5,
+                    "picture": "X(10)",
+                    "start_line": 47
+                }
+            ]
+        }
+    ],
+    "files": [
+        {
+            "type": "SELECT",
+            "text": "SELECT POLICY-IN\r\n               ASSIGN TO POLIN\r\n               ORGANIZATION IS LINE SEQUENTIAL\r\n               FILE STATUS IS WS-IN-STATUS.",
+            "start_line": 17,
+            "name": "POLICY-IN"
+        },
+        {
+            "type": "SELECT",
+            "text": "SELECT POLICY-MASTER\r\n               ASSIGN TO POLYMAST\r\n               ORGANIZATION IS INDEXED\r\n               ACCESS MODE IS DYNAMIC\r\n               RECORD KEY IS POLICY-NUMBER\r\n               FILE STATUS IS WS-VSAM-STATUS.",
+            "start_line": 22,
+            "name": "POLICY-MASTER"
+        },
+        {
+            "type": "FD",
+            "text": "FD  POLICY-IN.\r\n       01  POLICY-IN-REC.\r\n           05 PI-POLICY-NUMBER       PIC X(15).\r\n           05 PI-CUSTOMER-ID         PIC X(10).\r\n           05 PI-AGENT-ID            PIC X(10).\r\n           05 PI-PRODUCT-CODE        PIC X(10).\r\n           05 PI-POLICY-TYPE         PIC X(30).\r\n           05 PI-EFFECTIVE-DATE      PIC X(10).\r\n           05 PI-EXPIRATION-DATE     PIC X(10).\r\n           05 PI-CURRENT-STATUS      PIC X(20).\r\n           05 PI-PAYMENT-FREQUENCY   PIC X(20).\r\n           05 PI-POLICY-TERM         PIC 9(02).\r\n           05 PI-WRITTEN-PREMIUM     PIC 9(10)V99.\r\n           05 PI-EARNED-PREMIUM      PIC 9(10)V99.\r\n           05 PI-RENEWAL-DATE        PIC X(10).",
+            "start_line": 33,
+            "name": "POLICY-IN"
+        },
+        {
+            "type": "FD",
+            "name": "POLICY-MASTER",
+            "start_line": 48
+        }
+    ],
+    "variables": [
+        {
+            "text": "01  POLICY-IN-REC",
+            "start_line": 34,
+            "name": "POLICY-IN-REC"
+        },
+        {
+            "text": "05 PI-POLICY-NUMBER       PIC X(15)",
+            "start_line": 35,
+            "name": "PI-POLICY-NUMBER"
+        },
+        {
+            "text": "05 PI-CUSTOMER-ID         PIC X(10)",
+            "start_line": 36,
+            "name": "PI-CUSTOMER-ID"
+        },
+        {
+            "text": "05 PI-AGENT-ID            PIC X(10)",
+            "start_line": 37,
+            "name": "PI-AGENT-ID"
+        },
+        {
+            "text": "05 PI-PRODUCT-CODE        PIC X(10)",
+            "start_line": 38,
+            "name": "PI-PRODUCT-CODE"
+        },
+        {
+            "text": "05 PI-POLICY-TYPE         PIC X(30)",
+            "start_line": 39,
+            "name": "PI-POLICY-TYPE"
+        },
+        {
+            "text": "05 PI-EFFECTIVE-DATE      PIC X(10)",
+            "start_line": 40,
+            "name": "PI-EFFECTIVE-DATE"
+        },
+        {
+            "text": "05 PI-EXPIRATION-DATE     PIC X(10)",
+            "start_line": 41,
+            "name": "PI-EXPIRATION-DATE"
+        },
+        {
+            "text": "05 PI-CURRENT-STATUS      PIC X(20)",
+            "start_line": 42,
+            "name": "PI-CURRENT-STATUS"
+        },
+        {
+            "text": "05 PI-PAYMENT-FREQUENCY   PIC X(20)",
+            "start_line": 43,
+            "name": "PI-PAYMENT-FREQUENCY"
+        },
+        {
+            "text": "05 PI-POLICY-TERM         PIC 9(02)",
+            "start_line": 44,
+            "name": "PI-POLICY-TERM"
+        },
+        {
+            "text": "05 PI-WRITTEN-PREMIUM     PIC 9(10)V99",
+            "start_line": 45,
+            "name": "PI-WRITTEN-PREMIUM"
+        },
+        {
+            "text": "05 PI-EARNED-PREMIUM      PIC 9(10)V99",
+            "start_line": 46,
+            "name": "PI-EARNED-PREMIUM"
+        },
+        {
+            "text": "05 PI-RENEWAL-DATE        PIC X(10)",
+            "start_line": 47,
+            "name": "PI-RENEWAL-DATE"
+        },
+        {
+            "name": "WS-EOF",
+            "level": 77,
+            "picture": "X",
+            "start_line": 54,
+            "value": "'N'"
+        },
+        {
+            "name": "WS-IN-STATUS",
+            "level": 77,
+            "picture": "XX",
+            "start_line": 56,
+            "value": "SPACES"
+        },
+        {
+            "name": "WS-VSAM-STATUS",
+            "level": 77,
+            "picture": "XX",
+            "start_line": 58,
+            "value": "SPACES"
+        },
+        {
+            "name": "WS-READ-COUNT",
+            "level": 77,
+            "picture": "9(7)",
+            "start_line": 59,
+            "value": "ZERO"
+        },
+        {
+            "name": "WS-WRITE-COUNT",
+            "level": 77,
+            "picture": "9(7)",
+            "start_line": 61,
+            "value": "ZERO"
+        },
+        {
+            "name": "WS-ERROR-COUNT",
+            "level": 77,
+            "picture": "9(7)",
+            "start_line": 62,
+            "value": "ZERO"
+        }
+    ],
+    "copybooks": [
+        {
+            "name": "POLYMAST",
+            "start_line": 51
+        }
+    ],
+    "operations": {
+        "perform": [
+            "PERFORM 1000-INITIALIZE",
+            "PERFORM 2000-READ-INPUT",
+            "PERFORM 3000-VALIDATE",
+            "PERFORM 4000-WRITE-VSAM",
+            "PERFORM 9000-CLOSE-FILES"
+        ],
+        "read": [
+            "READ POLICY-IN"
+        ],
+        "write": [
+            "WRITE POLICY-MASTER-RECORD"
+        ],
+        "move": [
+            "MOVE 'Y' TO WS-EOF",
+            "MOVE PI-POLICY-NUMBER      TO POLICY-NUMBER",
+            "MOVE PI-CUSTOMER-ID        TO CUSTOMER-ID",
+            "MOVE PI-AGENT-ID           TO AGENT-ID",
+            "MOVE PI-PRODUCT-CODE       TO PRODUCT-CODE",
+            "MOVE PI-POLICY-TYPE        TO POLICY-TYPE",
+            "MOVE PI-EFFECTIVE-DATE     TO EFFECTIVE-DATE",
+            "MOVE PI-EXPIRATION-DATE    TO EXPIRATION-DATE",
+            "MOVE PI-CURRENT-STATUS     TO CURRENT-STATUS",
+            "MOVE PI-PAYMENT-FREQUENCY  TO PAYMENT-FREQUENCY",
+            "MOVE PI-POLICY-TERM        TO POLICY-TERM",
+            "MOVE PI-WRITTEN-PREMIUM    TO WRITTEN-PREMIUM",
+            "MOVE PI-EARNED-PREMIUM     TO EARNED-PREMIUM",
+            "MOVE PI-RENEWAL-DATE       TO RENEWAL-DATE"
+        ],
+        "open": [
+            "OPEN INPUT POLICY-IN",
+            "OPEN OUTPUT POLICY-MASTER"
+        ],
+        "close": [
+            "CLOSE POLICY-IN",
+            "CLOSE POLICY-MASTER"
+        ],
+        "display": [
+            "DISPLAY 'POLLOAD STARTED'",
+            "DISPLAY 'ERROR OPENING INPUT FILE'",
+            "DISPLAY 'STATUS = ' WS-IN-STATUS",
+            "DISPLAY 'ERROR OPENING VSAM FILE'",
+            "DISPLAY 'STATUS = ' WS-VSAM-STATUS",
+            "DISPLAY 'INVALID POLICY NUMBER'",
+            "DISPLAY 'DUPLICATE POLICY : '\r\n                       POLICY-NUMBER",
+            "DISPLAY '-------------------------------------'",
+            "DISPLAY 'TOTAL RECORDS READ    : '\r\n                    WS-READ-COUNT",
+            "DISPLAY 'TOTAL RECORDS WRITTEN : '\r\n                    WS-WRITE-COUNT",
+            "DISPLAY 'TOTAL ERRORS          : '\r\n                    WS-ERROR-COUNT",
+            "DISPLAY 'POLLOAD COMPLETED'",
+            "DISPLAY '-------------------------------------'"
+        ],
+        "if": [
+            "IF WS-EOF NOT = 'Y'",
+            "IF WS-IN-STATUS NOT = \"00\"",
+            "IF WS-VSAM-STATUS NOT = \"00\"",
+            "IF PI-POLICY-NUMBER = SPACES"
+        ],
+        "goto": [
+            "GO TO 3000-EXIT"
+        ],
+        "add": [
+            "ADD 1 TO WS-READ-COUNT",
+            "ADD 1 TO WS-ERROR-COUNT",
+            "ADD 1 TO WS-ERROR-COUNT",
+            "ADD 1 TO WS-WRITE-COUNT"
+        ]
+    },
+    "relationships": [
+        {
+            "source": "POLLOAD.CBL",
+            "relationship": "READS",
+            "target": "POLICY-IN"
+        },
+        {
+            "source": "POLLOAD.CBL",
+            "relationship": "WRITES",
+            "target": "POLICY-MASTER"
+        },
+        {
+            "source": "POLICY-MASTER",
+            "relationship": "WRITES_RECORD",
+            "target": "POLICY-MASTER-RECORD"
+        },
+        {
+            "source": "POLLOAD.CBL",
+            "relationship": "USES_COPYBOOK",
+            "target": "POLYMAST"
+        },
+        {
+            "source": "POLLOAD.CBL",
+            "relationship": "CONTAINS_RECORD",
+            "target": "POLICY-IN-REC"
+        },
+        {
+            "source": "POLICY-IN-REC",
+            "relationship": "CONTAINS_FIELD",
+            "target": "PI-POLICY-NUMBER"
+        },
+        {
+            "source": "POLICY-IN-REC",
+            "relationship": "CONTAINS_FIELD",
+            "target": "PI-CUSTOMER-ID"
+        },
+        {
+            "source": "POLICY-IN-REC",
+            "relationship": "CONTAINS_FIELD",
+            "target": "PI-AGENT-ID"
+        },
+        {
+            "source": "POLICY-IN-REC",
+            "relationship": "CONTAINS_FIELD",
+            "target": "PI-PRODUCT-CODE"
+        },
+        {
+            "source": "POLICY-IN-REC",
+            "relationship": "CONTAINS_FIELD",
+            "target": "PI-POLICY-TYPE"
+        },
+        {
+            "source": "POLICY-IN-REC",
+            "relationship": "CONTAINS_FIELD",
+            "target": "PI-EFFECTIVE-DATE"
+        },
+        {
+            "source": "POLICY-IN-REC",
+            "relationship": "CONTAINS_FIELD",
+            "target": "PI-EXPIRATION-DATE"
+        },
+        {
+            "source": "POLICY-IN-REC",
+            "relationship": "CONTAINS_FIELD",
+            "target": "PI-CURRENT-STATUS"
+        },
+        {
+            "source": "POLICY-IN-REC",
+            "relationship": "CONTAINS_FIELD",
+            "target": "PI-PAYMENT-FREQUENCY"
+        },
+        {
+            "source": "POLICY-IN-REC",
+            "relationship": "CONTAINS_FIELD",
+            "target": "PI-POLICY-TERM"
+        },
+        {
+            "source": "POLICY-IN-REC",
+            "relationship": "CONTAINS_FIELD",
+            "target": "PI-WRITTEN-PREMIUM"
+        },
+        {
+            "source": "POLICY-IN-REC",
+            "relationship": "CONTAINS_FIELD",
+            "target": "PI-EARNED-PREMIUM"
+        },
+        {
+            "source": "POLICY-IN-REC",
+            "relationship": "CONTAINS_FIELD",
+            "target": "PI-RENEWAL-DATE"
+        },
+        {
+            "source": "POLLOAD.CBL",
+            "relationship": "CONTAINS_PARAGRAPH",
+            "target": "MAIN-PROCESS"
+        },
+        {
+            "source": "POLLOAD.CBL",
+            "relationship": "CONTAINS_PARAGRAPH",
+            "target": "1000-INITIALIZE"
+        },
+        {
+            "source": "POLLOAD.CBL",
+            "relationship": "CONTAINS_PARAGRAPH",
+            "target": "2000-READ-INPUT"
+        },
+        {
+            "source": "POLLOAD.CBL",
+            "relationship": "CONTAINS_PARAGRAPH",
+            "target": "3000-VALIDATE"
+        },
+        {
+            "source": "POLLOAD.CBL",
+            "relationship": "CONTAINS_PARAGRAPH",
+            "target": "3000-EXIT"
+        },
+        {
+            "source": "POLLOAD.CBL",
+            "relationship": "CONTAINS_PARAGRAPH",
+            "target": "4000-WRITE-VSAM"
+        },
+        {
+            "source": "POLLOAD.CBL",
+            "relationship": "CONTAINS_PARAGRAPH",
+            "target": "9000-CLOSE-FILES"
+        },
+        {
+            "source": "POLLOAD.CBL",
+            "relationship": "CONTAINS_PARAGRAPH",
+            "target": "END-IF"
+        },
+        {
+            "source": "POLLOAD.CBL",
+            "relationship": "CONTAINS_PARAGRAPH",
+            "target": "END-READ"
+        },
+        {
+            "source": "POLLOAD.CBL",
+            "relationship": "CONTAINS_PARAGRAPH",
+            "target": "EXIT"
+        },
+        {
+            "source": "POLLOAD.CBL",
+            "relationship": "CONTAINS_PARAGRAPH",
+            "target": "END-WRITE"
+        },
+        {
+            "source": "POLLOAD.CBL",
+            "relationship": "PERFORMS",
+            "target": "1000-INITIALIZE"
+        },
+        {
+            "source": "POLLOAD.CBL",
+            "relationship": "PERFORMS",
+            "target": "2000-READ-INPUT"
+        },
+        {
+            "source": "POLLOAD.CBL",
+            "relationship": "PERFORMS",
+            "target": "3000-VALIDATE"
+        },
+        {
+            "source": "POLLOAD.CBL",
+            "relationship": "PERFORMS",
+            "target": "4000-WRITE-VSAM"
+        },
+        {
+            "source": "POLLOAD.CBL",
+            "relationship": "PERFORMS",
+            "target": "9000-CLOSE-FILES"
+        },
+        {
+            "source": "POLLOAD.CBL",
+            "relationship": "OPENS",
+            "target": "POLICY-IN"
+        },
+        {
+            "source": "POLLOAD.CBL",
+            "relationship": "OPENS",
+            "target": "POLICY-MASTER"
+        },
+        {
+            "source": "POLLOAD.CBL",
+            "relationship": "CLOSES",
+            "target": "POLICY-IN"
+        },
+        {
+            "source": "POLLOAD.CBL",
+            "relationship": "CLOSES",
+            "target": "POLICY-MASTER"
+        }
+    ],
+    "parse_errors": [
+        {
+            "text": "POLICY-IN\r\n               ASSIGN TO POLIN\r\n               ORGANIZATION IS",
+            "start_line": 17,
+            "end_line": 19
+        },
+        {
+            "text": "FD  POLICY-MASTER.\r\n\r\n       COPY POLYMAST.\r\n\r\n       WORKING-STORAGE SECTION.\r\n\r\n       77  WS-EOF                    PIC X VALUE 'N'.\r\n\r\n       77  WS-IN-STATUS              PIC XX VALUE SPACES.\r\n       77  WS-VSAM-STATUS            PIC XX VALUE SPACES.\r\n\r\n       77  WS-READ-COUNT             PIC 9(7) VALUE ZERO.\r\n       77  WS-WRITE-COUNT            PIC 9(7) VALUE ZERO.\r\n       77  WS-ERROR-COUNT            PIC 9(7) VALUE ZERO.",
+            "start_line": 49,
+            "end_line": 62
+        }
+    ]
+}

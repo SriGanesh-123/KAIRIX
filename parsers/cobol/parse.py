@@ -1,6 +1,7 @@
 from tree_sitter_language_pack import get_parser
 import json
 import re
+import sys
 from pathlib import Path
 
 

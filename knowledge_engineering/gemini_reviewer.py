@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 from typing import Any, Dict
 
 from pydantic import BaseModel, Field
 from google import genai
-from google.genai import types
+from google.genai import errors, types
 
 
 class ArtifactReview(BaseModel):
@@ -29,34 +30,56 @@ class ArtifactReview(BaseModel):
 class GeminiArtifactReviewer:
     """Review canonical artifacts with Gemini structured output."""
 
-    # Stable Gemini 3.5 Flash-Lite model. It is intended for high-throughput,
-    # low-cost structured extraction and subagent workloads.
-    DEFAULT_MODEL = "gemini-3.5-flash-lite"
-
-    def __init__(self, api_key: str, model: str = DEFAULT_MODEL) -> None:
+    def __init__(
+        self,
+        api_key: str,
+        model: str = "gemini-3.5-flash-lite",
+        max_retries: int = 3,
+        retry_delay_seconds: float = 2.0,
+    ) -> None:
         if not api_key:
             raise ValueError("GEMINI_API_KEY is required for GeminiArtifactReviewer")
+        if max_retries < 0:
+            raise ValueError("max_retries must be >= 0")
         self.model = model
+        self.max_retries = max_retries
+        self.retry_delay_seconds = retry_delay_seconds
         self.client = genai.Client(api_key=api_key)
 
     def review(self, artifact: Dict[str, Any], profile: Dict[str, Any]) -> Dict[str, Any]:
         source_text = self._load_source(artifact)
         prompt = self._build_prompt(artifact, profile, source_text)
 
-        response = self.client.models.generate_content(
-            model=self.model,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                response_schema=ArtifactReview,
-            ),
-        )
+        response = self._generate_with_retry(prompt, artifact.get("file_name", "unknown"))
 
         if not response.text:
             raise RuntimeError(f"Gemini returned an empty response for {artifact.get('file_name')}")
 
         result = ArtifactReview.model_validate_json(response.text)
         return result.model_dump()
+
+    def _generate_with_retry(self, prompt: str, artifact_name: str):
+        for attempt in range(self.max_retries + 1):
+            try:
+                return self.client.models.generate_content(
+                    model=self.model,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        response_mime_type="application/json",
+                        response_schema=ArtifactReview,
+                    ),
+                )
+            except errors.ServerError as exc:
+                if getattr(exc, "status_code", None) != 503 or attempt >= self.max_retries:
+                    raise
+
+                wait_seconds = self.retry_delay_seconds * (2**attempt)
+                print(
+                    f"Gemini temporarily unavailable for {artifact_name}; "
+                    f"retry {attempt + 1}/{self.max_retries} in {wait_seconds:.1f}s...",
+                    flush=True,
+                )
+                time.sleep(wait_seconds)
 
     @staticmethod
     def _load_source(artifact: Dict[str, Any]) -> str:
@@ -73,7 +96,6 @@ class GeminiArtifactReviewer:
         if not path.exists() or not path.is_file():
             return f"Original source could not be loaded from: {path_value}"
 
-        # Keep prompts bounded while retaining enough source for semantic review.
         text = path.read_text(encoding="utf-8", errors="replace")
         return text[:40000]
 

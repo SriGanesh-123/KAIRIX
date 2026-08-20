@@ -1,8 +1,7 @@
 """Python 3.12 COBOL runner with 3.14 extraction parity.
 
-The crash-safe Tree-sitter handling is kept, while all semantic/source
-extraction is delegated to the existing parser helpers so Python 3.12 uses
-the same extraction rules as the known-good 3.14 implementation.
+Uses a crash-safe Tree-sitter parse while delegating semantic extraction to
+Python 3.12-compatible helpers that mirror the known-good 3.14 behavior.
 """
 
 import json
@@ -15,19 +14,17 @@ OUTPUT_DIR = PROJECT_ROOT / "output" / "cobol"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import parse  # noqa: E402
+import compat_helpers_312 as extract  # noqa: E402
 from tree_sitter_language_pack import get_parser  # noqa: E402
 
 PARSER = get_parser("cobol")
 
 
 def safe_tree_metadata(root):
-    """Use only stable Tree-sitter APIs on Python 3.12."""
     node_count = 0
     error_count = 0
     type_counts = {}
     stack = [root]
-
     while stack:
         node = stack.pop()
         node_count += 1
@@ -36,7 +33,6 @@ def safe_tree_metadata(root):
         if node_type == "ERROR":
             error_count += 1
         stack.extend(reversed(node.children))
-
     return {
         "root_type": root.type,
         "has_error": root.has_error,
@@ -63,29 +59,29 @@ def parse_one(file_path: Path) -> dict:
     tree_metadata = safe_tree_metadata(root)
 
     print("  [3/8] Source extraction...", flush=True)
-    program_id = parse.extract_program_id(text)
-    divisions = parse.extract_divisions(text)
-    sections = parse.extract_sections(text)
-    paragraphs = parse.extract_paragraphs(text)
+    program_id = extract.extract_program_id(text)
+    divisions = extract.extract_divisions(text)
+    sections = extract.extract_sections(text)
+    paragraphs = extract.extract_paragraphs(text)
 
     print("  [4/8] Data extraction...", flush=True)
-    files = parse.extract_files(text)
-    variables = parse.extract_variables(text)
-    records = parse.extract_records(variables)
-    copybooks = parse.extract_copybooks(text)
+    files = extract.extract_files(text)
+    variables = extract.extract_variables(text)
+    records = extract.extract_records(variables)
+    copybooks = extract.extract_copybooks(text)
 
     print("  [5/8] Operations...", flush=True)
-    operations = parse.extract_operations(text)
-    performs = parse.extract_performs(text)
-    calls = parse.extract_calls(text)
+    operations = extract.extract_operations(text)
+    performs = extract.extract_performs(text)
+    calls = extract.extract_calls(text)
 
     print("  [6/8] I/O and database...", flush=True)
-    sql_statements = parse.extract_sql(text)
-    database_tables = parse.extract_database_tables(sql_statements)
-    file_operations = parse.extract_file_operations(text)
-    moves = parse.extract_moves(text)
-    conditions = parse.extract_conditions(text)
-    cics_statements = parse.extract_cics(text)
+    sql_statements = extract.extract_sql(text)
+    database_tables = extract.extract_database_tables(sql_statements)
+    file_operations = extract.extract_file_operations(text)
+    moves = extract.extract_moves(text)
+    conditions = extract.extract_conditions(text)
+    cics_statements = extract.extract_cics(text)
 
     metadata = {
         "file": file_path.name,
@@ -121,18 +117,11 @@ def parse_one(file_path: Path) -> dict:
 
     print("  [7/8] Building metadata...", flush=True)
     print("  [8/8] Relationships...", flush=True)
-    metadata["relationships"] = parse.extract_relationships(
-        file_path.name,
-        metadata,
-    )
+    metadata["relationships"] = extract.extract_relationships(file_path.name, metadata)
 
     if tree_metadata["error_count"]:
-        metadata["parse_errors"] = [{
-            "type": "TREE_SITTER_ERROR",
-            "count": tree_metadata["error_count"],
-        }]
+        metadata["parse_errors"] = [{"type": "TREE_SITTER_ERROR", "count": tree_metadata["error_count"]}]
 
-    # Validate serialization before replacing any existing output.
     json.dumps(metadata, ensure_ascii=False)
     print("  PARSE COMPLETE", flush=True)
     return metadata

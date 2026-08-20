@@ -35,14 +35,18 @@ class GeminiArtifactReviewer:
         api_key: str,
         model: str = "gemini-3.5-flash-lite",
         fallback_models: list[str] | None = None,
-        max_retries: int = 2,
+        max_retries: int = 1,
         retry_delay_seconds: float = 2.0,
     ) -> None:
         if not api_key:
             raise ValueError("GEMINI_API_KEY is required for GeminiArtifactReviewer")
         if max_retries < 0:
             raise ValueError("max_retries must be >= 0")
-        self.models = list(dict.fromkeys([model, *(fallback_models or ["gemini-3.5-flash", "gemini-3.6-flash"])]))
+        self.models = list(
+            dict.fromkeys(
+                [model, *(fallback_models or ["gemini-3.5-flash", "gemini-3.6-flash"])]
+            )
+        )
         self.max_retries = max_retries
         self.retry_delay_seconds = retry_delay_seconds
         self.client = genai.Client(api_key=api_key)
@@ -57,6 +61,7 @@ class GeminiArtifactReviewer:
 
     def _generate_with_fallback(self, prompt: str, artifact_name: str):
         last_error: Exception | None = None
+
         for model_index, model in enumerate(self.models):
             for attempt in range(self.max_retries + 1):
                 print(
@@ -79,16 +84,23 @@ class GeminiArtifactReviewer:
                     last_error = exc
                     if getattr(exc, "status_code", None) != 503:
                         raise
+
                     if attempt < self.max_retries:
-                        wait_seconds = self.retry_delay_seconds * (2 ** attempt)
-                        print(f"Gemini 503 from {model}; retrying in {wait_seconds:.1f}s...", flush=True)
+                        wait_seconds = self.retry_delay_seconds * (2**attempt)
+                        print(
+                            f"Gemini 503 from {model}; retrying in {wait_seconds:.1f}s...",
+                            flush=True,
+                        )
                         time.sleep(wait_seconds)
-                    else:
-                        if model_index + 1 < len(self.models):
-                            print(
-                                f"Gemini 503 from {model}; FALLBACK -> {self.models[model_index + 1]}",
-                                flush=True,
-                            )
+                        continue
+
+                    if model_index + 1 < len(self.models):
+                        print(
+                            f"Gemini 503 from {model}; FALLBACK -> {self.models[model_index + 1]}",
+                            flush=True,
+                        )
+                        break
+
         if last_error is not None:
             raise last_error
         raise RuntimeError("No Gemini models configured for artifact review")

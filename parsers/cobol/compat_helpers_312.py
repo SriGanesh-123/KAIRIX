@@ -18,12 +18,7 @@ def extract_program_id(source: str):
 
 def extract_divisions(source):
     result = []
-    patterns = (
-        ("identification_division", r"\bIDENTIFICATION\s+DIVISION\s*\."),
-        ("environment_division", r"\bENVIRONMENT\s+DIVISION\s*\."),
-        ("data_division", r"\bDATA\s+DIVISION\s*\."),
-        ("procedure_division", r"\bPROCEDURE\s+DIVISION\s*\."),
-    )
+    patterns = (("identification_division", r"\bIDENTIFICATION\s+DIVISION\s*\."),("environment_division", r"\bENVIRONMENT\s+DIVISION\s*\."),("data_division", r"\bDATA\s+DIVISION\s*\."),("procedure_division", r"\bPROCEDURE\s+DIVISION\s*\."))
     for kind, pattern in patterns:
         match = re.search(pattern, source, re.I)
         if match:
@@ -54,6 +49,8 @@ def extract_paragraphs(source):
 
 
 def extract_files(source):
+    # The canonical parser represents logical COBOL files by SELECT entries.
+    # FD entries describe record layouts and must not be counted as separate files.
     result = []
     select_pattern = re.compile(r"\bSELECT\s+([A-Z0-9-]+)(.*?\.)", re.I | re.S)
     for match in select_pattern.finditer(source):
@@ -63,9 +60,6 @@ def extract_files(source):
         if assign:
             item["assign_to"] = assign.group(1).upper()
         result.append(item)
-    fd_pattern = re.compile(r"(?m)^\s*FD\s+([A-Z0-9-]+)\s*[^\n.]*\.\s*$", re.I)
-    for match in fd_pattern.finditer(source):
-        result.append({"type": "FD", "name": match.group(1).upper(), "start_line": line_number(source, match.start())})
     return result
 
 
@@ -74,37 +68,27 @@ def extract_variables(source):
     seen = set()
     pattern = re.compile(r"(?m)^\s*(01|02|05|10|15|20|49|77)\s+([A-Z0-9-]+)(.*)$", re.I)
     for match in pattern.finditer(source):
-        level = int(match.group(1))
-        name = match.group(2).upper()
-        key = (level, name)
-        if key in seen:
-            continue
+        level = int(match.group(1)); name = match.group(2).upper(); key = (level, name)
+        if key in seen: continue
         seen.add(key)
         item = {"name": name, "level": level, "start_line": line_number(source, match.start())}
         tail = match.group(3)
         picture = re.search(r"\bPIC(?:TURE)?\s+([A-Z0-9()VXS9+\-.,]+)", tail, re.I)
-        if picture:
-            item["picture"] = picture.group(1).upper()
+        if picture: item["picture"] = picture.group(1).upper()
         value = re.search(r"\bVALUE\s+(.+?)\s*\.\s*$", tail, re.I)
-        if value:
-            item["value"] = clean(value.group(1))
+        if value: item["value"] = clean(value.group(1))
         result.append(item)
-    condition = re.compile(r"(?m)^\s*88\s+([A-Z0-9-]+)\s+VALUE\s+(.+?)\s*\.\s*$", re.I)
-    for match in condition.finditer(source):
+    for match in re.finditer(r"(?m)^\s*88\s+([A-Z0-9-]+)\s+VALUE\s+(.+?)\s*\.\s*$", source, re.I):
         result.append({"name": match.group(1).upper(), "level": 88, "value": clean(match.group(2)), "start_line": line_number(source, match.start())})
     return result
 
 
 def extract_records(variables):
     records = []
-    by_record = [v for v in variables if v.get("level") == 1]
-    if not by_record:
-        return records
-    for record in by_record:
+    for record in [v for v in variables if v.get("level") == 1]:
         fields = []
-        prefix = record["name"] + "-"
         for var in variables:
-            if var.get("level") in (2, 5) and (var["name"].startswith(prefix) or True):
+            if var.get("level") in (2, 5):
                 fields.append(var.copy())
         records.append({"record_name": record["name"], "level": 1, "start_line": record.get("start_line"), "fields": fields})
     return records
@@ -118,24 +102,12 @@ def _unique(values):
     seen = set(); out = []
     for value in values:
         key = value if isinstance(value, str) else repr(sorted(value.items()))
-        if key not in seen:
-            seen.add(key); out.append(value)
+        if key not in seen: seen.add(key); out.append(value)
     return out
 
 
 def extract_operations(source):
-    patterns = {
-        "perform": r"\bPERFORM\b[^.]*\.",
-        "read": r"\bREAD\s+[A-Z0-9-]+[^.]*\.",
-        "write": r"\bWRITE\s+[A-Z0-9-]+[^.]*\.",
-        "move": r"\bMOVE\b[^.]*\.",
-        "open": r"\bOPEN\s+(?:INPUT|OUTPUT|I-O|EXTEND)?\s*[A-Z0-9-]+[^.]*\.",
-        "close": r"\bCLOSE\s+[A-Z0-9-]+[^.]*\.",
-        "display": r"\bDISPLAY\b[^.]*\.",
-        "if": r"\bIF\b[^.]*\.",
-        "goto": r"\bGO\s+TO\s+[A-Z0-9-]+[^.]*\.",
-        "add": r"\bADD\b[^.]*\.",
-    }
+    patterns = {"perform": r"\bPERFORM\b[^.]*\.", "read": r"\bREAD\s+[A-Z0-9-]+[^.]*\.", "write": r"\bWRITE\s+[A-Z0-9-]+[^.]*\.", "move": r"\bMOVE\b[^.]*\.", "open": r"\bOPEN\s+(?:INPUT|OUTPUT|I-O|EXTEND)?\s*[A-Z0-9-]+[^.]*\.", "close": r"\bCLOSE\s+[A-Z0-9-]+[^.]*\.", "display": r"\bDISPLAY\b[^.]*\.", "if": r"\bIF\b[^.]*\.", "goto": r"\bGO\s+TO\s+[A-Z0-9-]+[^.]*\.", "add": r"\bADD\b[^.]*\."}
     return {key: _unique([clean(x) for x in re.findall(pattern, source, re.I)]) for key, pattern in patterns.items()}
 
 
@@ -169,8 +141,7 @@ def extract_moves(source):
     result = []
     for src, target in re.findall(r"\bMOVE\s+(.+?)\s+TO\s+([A-Z0-9-]+)", source, re.I | re.S):
         src = clean(src)
-        if len(src) <= 200:
-            result.append({"source": src, "target": target.upper()})
+        if len(src) <= 200: result.append({"source": src, "target": target.upper()})
     return result
 
 
@@ -180,20 +151,32 @@ def extract_conditions(source):
 
 
 def extract_relationships(file_name, metadata):
+    """Build the compact relationship set used by the canonical 3.14 output.
+
+    Do not emit structural field/paragraph edges here: those are represented
+    inside records/paragraphs and were the source of the 3.12 relationship
+    explosion (hundreds of synthetic edges per program).
+    """
     relationships = []
-    for op in metadata["operations"]["read"]:
+    def add(kind, target):
+        if target:
+            relationships.append({"source": file_name, "relationship": kind, "target": target})
+
+    for op in metadata["operations"].get("read", []):
         m = re.search(r"\bREAD\s+([A-Z0-9-]+)", op, re.I)
-        if m: relationships.append({"source": file_name, "relationship": "READS", "target": m.group(1).upper()})
-    for op in metadata["operations"]["write"]:
+        if m: add("READS", m.group(1).upper())
+    for op in metadata["operations"].get("write", []):
         m = re.search(r"\bWRITE\s+([A-Z0-9-]+)", op, re.I)
-        if m: relationships.append({"source": file_name, "relationship": "WRITES", "target": m.group(1).upper()})
-    for item in metadata["copybooks"]:
-        if item.get("name"): relationships.append({"source": file_name, "relationship": "USES_COPYBOOK", "target": item["name"]})
-    for record in metadata["records"]:
-        relationships.append({"source": file_name, "relationship": "CONTAINS_RECORD", "target": record["record_name"]})
-        for field in record.get("fields", []): relationships.append({"source": record["record_name"], "relationship": "CONTAINS_FIELD", "target": field["name"]})
-    for p in metadata["paragraphs"]:
-        relationships.append({"source": file_name, "relationship": "CONTAINS_PARAGRAPH", "target": p["text"].rstrip(".")})
-    for target in metadata.get("performs", []): relationships.append({"source": file_name, "relationship": "PERFORMS", "target": target})
-    for target in metadata.get("calls", []): relationships.append({"source": file_name, "relationship": "CALLS", "target": target})
-    return relationships
+        if m: add("WRITES", m.group(1).upper())
+    for item in metadata.get("copybooks", []): add("USES_COPYBOOK", item.get("name"))
+    for record in metadata.get("records", []): add("CONTAINS_RECORD", record.get("record_name"))
+    for target in metadata.get("performs", []): add("PERFORMS", target)
+    for target in metadata.get("calls", []): add("CALLS", target)
+
+    # Deduplicate exact semantic edges while preserving order.
+    seen = set(); result = []
+    for rel in relationships:
+        key = (rel["source"], rel["relationship"], rel["target"])
+        if key not in seen:
+            seen.add(key); result.append(rel)
+    return result

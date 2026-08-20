@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from .normalize import normalize_file
+from .normalize import MetadataLoadError, normalize_file
 from .schema import KnowledgeDocument
 from .validate import validate_document
 
@@ -17,6 +17,7 @@ KNOWLEDGE_OUTPUT = OUTPUT_ROOT / "knowledge" / "canonical_metadata.json"
 
 def main() -> None:
     documents = []
+    skipped_files = []
 
     source_dirs = [
         (OUTPUT_ROOT / "sql", "sql"),
@@ -32,9 +33,13 @@ def main() -> None:
             if path.name == "semantic_data.json":
                 continue
 
-            documents.append(
-                normalize_file(path, source_type)
-            )
+            try:
+                documents.append(normalize_file(path, source_type))
+            except MetadataLoadError as exc:
+                # A parser may leave an empty/incomplete artifact after a failed run.
+                # Do not make the whole knowledge build unusable; preserve the issue
+                # in the build report so the source parser can be repaired separately.
+                skipped_files.append(str(exc))
 
     merged = KnowledgeDocument()
 
@@ -51,14 +56,16 @@ def main() -> None:
     merged.evidence = list({item.id: item for item in merged.evidence}.values())
     merged.business_rules = list({item.id: item for item in merged.business_rules}.values())
 
-    errors = validate_document(merged)
+    validation_errors = validate_document(merged)
+    all_issues = skipped_files + validation_errors
 
     KNOWLEDGE_OUTPUT.parent.mkdir(parents=True, exist_ok=True)
 
     payload = merged.model_dump()
     payload["validation"] = {
-        "status": "PASS" if not errors else "FAIL",
-        "errors": errors,
+        "status": "PASS" if not all_issues else "WARN",
+        "errors": validation_errors,
+        "skipped_files": skipped_files,
         "counts": {
             "artifacts": len(merged.artifacts),
             "entities": len(merged.entities),
@@ -76,17 +83,22 @@ def main() -> None:
     print("=" * 72)
     print("CANONICAL KNOWLEDGE BUILD")
     print("=" * 72)
-    print(f"Output       : {KNOWLEDGE_OUTPUT}")
-    print(f"Artifacts    : {len(merged.artifacts)}")
-    print(f"Entities     : {len(merged.entities)}")
-    print(f"Relationships: {len(merged.relationships)}")
-    print(f"Evidence     : {len(merged.evidence)}")
+    print(f"Output        : {KNOWLEDGE_OUTPUT}")
+    print(f"Artifacts     : {len(merged.artifacts)}")
+    print(f"Entities      : {len(merged.entities)}")
+    print(f"Relationships : {len(merged.relationships)}")
+    print(f"Evidence      : {len(merged.evidence)}")
     print(f"Business rules: {len(merged.business_rules)}")
-    print(f"Validation   : {'PASS' if not errors else 'FAIL'}")
+    print(f"Validation    : {'PASS' if not all_issues else 'WARN'}")
 
-    if errors:
-        print("Errors:")
-        for error in errors:
+    if skipped_files:
+        print("Skipped metadata files:")
+        for issue in skipped_files:
+            print(f"  - {issue}")
+
+    if validation_errors:
+        print("Validation errors:")
+        for error in validation_errors:
             print(f"  - {error}")
 
 

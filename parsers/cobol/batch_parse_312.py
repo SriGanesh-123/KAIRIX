@@ -20,8 +20,6 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import parse  # noqa: E402
 
-# One parser instance for the complete batch, matching the known-good
-# Python 3.14 architecture.
 PARSER = get_parser("cobol")
 
 
@@ -38,6 +36,10 @@ def unique(values):
             seen.add(key)
             result.append(value)
     return result
+
+
+def line_number(source: str, position: int) -> int:
+    return source[:position].count("\n") + 1
 
 
 def extract_tree_metadata(root):
@@ -90,6 +92,89 @@ def extract_operations(source):
     }
 
 
+def extract_variables_312(source: str, records: list, existing: list) -> list:
+    """Recover the variable inventory without Tree-sitter position/text APIs.
+
+    The 3.14 parser counted COBOL data definitions broadly: 01 groups,
+    elementary 02/05/10/15/20/49/77 items, 88 condition names, and the
+    SELECT file names. Reconstruct the same inventory from source text.
+    """
+    variables = []
+    seen = set()
+
+    def add(item):
+        name = item.get("name")
+        if not name:
+            return
+        key = (str(item.get("level", "")), name.upper())
+        if key not in seen:
+            seen.add(key)
+            variables.append(item)
+
+    # 01-level data definitions, including FD records and working-storage groups.
+    level_01 = re.compile(
+        r"(?m)^\s*01\s+(?P<name>[A-Z0-9-]+)\s*\.\s*$",
+        re.IGNORECASE,
+    )
+    for m in level_01.finditer(source):
+        add({
+            "name": m.group("name").upper(),
+            "level": 1,
+            "start_line": line_number(source, m.start()),
+        })
+
+    # Elementary and subordinate COBOL data items.
+    elementary = re.compile(
+        r"(?m)^\s*(?P<level>02|05|10|15|20|49|77)\s+"
+        r"(?P<name>[A-Z0-9-]+)"
+        r"(?:\s+PIC(?:TURE)?\s+"
+        r"(?P<picture>[A-Z0-9()VXS9+\-.,]+))?"
+        r"(?:\s+VALUE\s+(?P<value>[^.]+))?\s*\.\s*$",
+        re.IGNORECASE,
+    )
+    for m in elementary.finditer(source):
+        item = {
+            "name": m.group("name").upper(),
+            "level": int(m.group("level")),
+            "start_line": line_number(source, m.start()),
+        }
+        if m.group("picture"):
+            item["picture"] = m.group("picture").upper()
+        if m.group("value"):
+            item["value"] = clean_spaces(m.group("value"))
+        add(item)
+
+    # 88 condition names are variables in the parser's semantic inventory.
+    condition = re.compile(
+        r"(?m)^\s*88\s+(?P<name>[A-Z0-9-]+)\s+VALUE\s+(?P<value>[^.]+)\.\s*$",
+        re.IGNORECASE,
+    )
+    for m in condition.finditer(source):
+        add({
+            "name": m.group("name").upper(),
+            "level": 88,
+            "value": clean_spaces(m.group("value")),
+            "start_line": line_number(source, m.start()),
+        })
+
+    # SELECT file identifiers are represented in the 3.14 variable inventory.
+    select_pattern = re.compile(
+        r"(?mi)^\s*SELECT\s+(?P<name>[A-Z0-9-]+)\b"
+    )
+    for m in select_pattern.finditer(source):
+        add({
+            "name": m.group("name").upper(),
+            "level": "SELECT",
+            "start_line": line_number(source, m.start()),
+        })
+
+    # Preserve any variables already recovered by fallback_extract().
+    for item in existing:
+        add(item)
+
+    return variables
+
+
 def parse_cobol_file_312(file_path: Path) -> dict:
     print()
     print("=" * 80)
@@ -138,12 +223,15 @@ def parse_cobol_file_312(file_path: Path) -> dict:
         "parse_errors": [],
     }
 
-    # Reuse the existing regex-based extraction logic. It never needs
-    # Tree-sitter node positions/text and therefore avoids the crashing API.
     metadata = parse.fallback_extract(source_text, metadata)
 
     print("  [4/8] Data extraction...", flush=True)
     metadata["records"] = parse.extract_records(source_text)
+    metadata["variables"] = extract_variables_312(
+        source_text,
+        metadata["records"],
+        metadata["variables"],
+    )
 
     print("  [5/8] Operations...", flush=True)
     metadata["performs"] = unique(
@@ -194,7 +282,11 @@ def parse_cobol_file_312(file_path: Path) -> dict:
     ]
     metadata["conditions"] = unique(
         clean_spaces(x)
-        for x in re.findall(r"\bIF\s+(.+?)(?=\b(?:MOVE|DISPLAY|PERFORM|READ|WRITE|COMPUTE|ADD|SUBTRACT|MULTIPLY|DIVIDE|END-IF)\b|\.)", source_text, re.IGNORECASE | re.DOTALL)
+        for x in re.findall(
+            r"\bIF\s+(.+?)(?=\b(?:MOVE|DISPLAY|PERFORM|READ|WRITE|COMPUTE|ADD|SUBTRACT|MULTIPLY|DIVIDE|END-IF)\b|\.)",
+            source_text,
+            re.IGNORECASE | re.DOTALL,
+        )
         if 0 < len(clean_spaces(x)) <= 300
     )
 

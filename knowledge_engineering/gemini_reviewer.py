@@ -29,7 +29,11 @@ class ArtifactReview(BaseModel):
 class GeminiArtifactReviewer:
     """Review canonical artifacts with Gemini structured output."""
 
-    def __init__(self, api_key: str, model: str = "gemini-2.5-flash-lite") -> None:
+    # Stable Gemini 3.5 Flash-Lite model. It is intended for high-throughput,
+    # low-cost structured extraction and subagent workloads.
+    DEFAULT_MODEL = "gemini-3.5-flash-lite"
+
+    def __init__(self, api_key: str, model: str = DEFAULT_MODEL) -> None:
         if not api_key:
             raise ValueError("GEMINI_API_KEY is required for GeminiArtifactReviewer")
         self.model = model
@@ -45,7 +49,6 @@ class GeminiArtifactReviewer:
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
                 response_schema=ArtifactReview,
-                temperature=0.1,
             ),
         )
 

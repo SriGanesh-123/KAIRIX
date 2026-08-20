@@ -1,0 +1,2 @@
+# Knowledge Engineering layer
+pydantic==2.11.7

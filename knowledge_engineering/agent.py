@@ -1,7 +1,8 @@
 """Knowledge Engineering Agent orchestration.
 
-The first implementation is deterministic and provider-neutral. An LLM reviewer can
-be plugged in later without changing the canonical metadata contract.
+The agent combines deterministic artifact analysis with an optional LLM reviewer.
+LLM outages are recorded as pending reviews so one unavailable provider does not
+abort the complete knowledge-engineering run.
 """
 
 from __future__ import annotations
@@ -37,20 +38,57 @@ class KnowledgeEngineeringAgent:
 
         for profile in profiles:
             artifact = artifacts[profile["artifact_id"]]
+            review_status = "LLM_REVIEWED"
             if self.reviewer is not None:
-                review = self.reviewer.review(artifact, profile)
-                mode = "llm"
+                try:
+                    review = self.reviewer.review(artifact, profile)
+                    mode = "llm"
+                except Exception as exc:
+                    review = {
+                        "purpose": profile.get("purpose", ""),
+                        "summary": "LLM review could not be completed.",
+                        "key_findings": [],
+                        "dependencies": [],
+                        "business_rules": [],
+                        "semantic_gaps": [str(exc)],
+                        "evidence_candidates": [],
+                        "confidence": 0.0,
+                        "needs_deeper_analysis": True,
+                        "reason": "LLM provider was unavailable; retry the artifact review later.",
+                    }
+                    mode = "llm_pending"
+                    review_status = "LLM_REVIEW_PENDING"
             else:
                 review = self._deterministic_review(profile)
                 mode = "deterministic_baseline"
-            reviews.append({"artifact_id": profile["artifact_id"], "mode": mode, **review})
+                review_status = "DETERMINISTIC_REVIEW"
+
+            reviews.append(
+                {
+                    "artifact_id": profile["artifact_id"],
+                    "mode": mode,
+                    "status": review_status,
+                    **review,
+                }
+            )
 
             if review.get("needs_deeper_analysis"):
                 gaps.append(
                     {
                         "artifact_id": profile["artifact_id"],
                         "type": "DEEPER_ANALYSIS",
-                        "reason": review.get("reason", "Artifact requires additional analysis."),
+                        "reason": review.get(
+                            "reason", "Artifact requires additional analysis."
+                        ),
+                    }
+                )
+
+            if review_status == "LLM_REVIEW_PENDING":
+                gaps.append(
+                    {
+                        "artifact_id": profile["artifact_id"],
+                        "type": "LLM_REVIEW_PENDING",
+                        "reason": "LLM provider unavailable; review is pending retry.",
                     }
                 )
 
@@ -68,7 +106,7 @@ class KnowledgeEngineeringAgent:
             "schema_version": "1.0",
             "agent": {
                 "name": "knowledge_engineering_agent",
-                "version": "0.1.0",
+                "version": "0.2.0",
                 "mode": "llm_enabled" if self.reviewer else "deterministic_baseline",
             },
             "source": {
@@ -84,6 +122,12 @@ class KnowledgeEngineeringAgent:
                 "profiles": len(profiles),
                 "reviews": len(reviews),
                 "knowledge_gaps": len(gaps),
+                "llm_reviews_completed": sum(
+                    item.get("status") == "LLM_REVIEWED" for item in reviews
+                ),
+                "llm_reviews_pending": sum(
+                    item.get("status") == "LLM_REVIEW_PENDING" for item in reviews
+                ),
                 "deeper_analysis_required": sum(
                     item.get("type") == "DEEPER_ANALYSIS" for item in gaps
                 ),

@@ -34,14 +34,22 @@ class GeminiArtifactReviewer:
         self,
         api_key: str,
         model: str = "gemini-3.5-flash-lite",
-        max_retries: int = 3,
+        fallback_models: list[str] | None = None,
+        max_retries: int = 2,
         retry_delay_seconds: float = 2.0,
     ) -> None:
         if not api_key:
             raise ValueError("GEMINI_API_KEY is required for GeminiArtifactReviewer")
         if max_retries < 0:
             raise ValueError("max_retries must be >= 0")
+
         self.model = model
+        self.fallback_models = fallback_models or [
+            "gemini-3.5-flash",
+            "gemini-3.6-flash",
+        ]
+        # Keep order while removing duplicates.
+        self.models = list(dict.fromkeys([self.model, *self.fallback_models]))
         self.max_retries = max_retries
         self.retry_delay_seconds = retry_delay_seconds
         self.client = genai.Client(api_key=api_key)
@@ -50,7 +58,7 @@ class GeminiArtifactReviewer:
         source_text = self._load_source(artifact)
         prompt = self._build_prompt(artifact, profile, source_text)
 
-        response = self._generate_with_retry(prompt, artifact.get("file_name", "unknown"))
+        response = self._generate_with_fallback(prompt, artifact.get("file_name", "unknown"))
 
         if not response.text:
             raise RuntimeError(f"Gemini returned an empty response for {artifact.get('file_name')}")
@@ -58,28 +66,49 @@ class GeminiArtifactReviewer:
         result = ArtifactReview.model_validate_json(response.text)
         return result.model_dump()
 
-    def _generate_with_retry(self, prompt: str, artifact_name: str):
-        for attempt in range(self.max_retries + 1):
-            try:
-                return self.client.models.generate_content(
-                    model=self.model,
-                    contents=prompt,
-                    config=types.GenerateContentConfig(
-                        response_mime_type="application/json",
-                        response_schema=ArtifactReview,
-                    ),
-                )
-            except errors.ServerError as exc:
-                if getattr(exc, "status_code", None) != 503 or attempt >= self.max_retries:
-                    raise
+    def _generate_with_fallback(self, prompt: str, artifact_name: str):
+        """Try the configured Gemini models in order for transient 503 failures."""
+        last_error: Exception | None = None
 
-                wait_seconds = self.retry_delay_seconds * (2**attempt)
-                print(
-                    f"Gemini temporarily unavailable for {artifact_name}; "
-                    f"retry {attempt + 1}/{self.max_retries} in {wait_seconds:.1f}s...",
-                    flush=True,
-                )
-                time.sleep(wait_seconds)
+        for model in self.models:
+            for attempt in range(self.max_retries + 1):
+                try:
+                    print(
+                        f"Gemini review: {artifact_name} using {model} "
+                        f"(attempt {attempt + 1}/{self.max_retries + 1})",
+                        flush=True,
+                    )
+                    return self.client.models.generate_content(
+                        model=model,
+                        contents=prompt,
+                        config=types.GenerateContentConfig(
+                            response_mime_type="application/json",
+                            response_schema=ArtifactReview,
+                        ),
+                    )
+                except errors.ServerError as exc:
+                    if getattr(exc, "status_code", None) != 503:
+                        raise
+                    last_error = exc
+                    if attempt >= self.max_retries:
+                        print(
+                            f"Gemini model {model} unavailable for {artifact_name}; "
+                            "trying next model...",
+                            flush=True,
+                        )
+                        break
+
+                    wait_seconds = self.retry_delay_seconds * (2**attempt)
+                    print(
+                        f"Gemini temporarily unavailable for {artifact_name}; "
+                        f"retry {attempt + 1}/{self.max_retries} in {wait_seconds:.1f}s...",
+                        flush=True,
+                    )
+                    time.sleep(wait_seconds)
+
+        if last_error is not None:
+            raise last_error
+        raise RuntimeError("No Gemini models configured for artifact review")
 
     @staticmethod
     def _load_source(artifact: Dict[str, Any]) -> str:

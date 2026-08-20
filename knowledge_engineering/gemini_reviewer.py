@@ -42,14 +42,7 @@ class GeminiArtifactReviewer:
             raise ValueError("GEMINI_API_KEY is required for GeminiArtifactReviewer")
         if max_retries < 0:
             raise ValueError("max_retries must be >= 0")
-
-        self.model = model
-        self.fallback_models = fallback_models or [
-            "gemini-3.5-flash",
-            "gemini-3.6-flash",
-        ]
-        # Keep order while removing duplicates.
-        self.models = list(dict.fromkeys([self.model, *self.fallback_models]))
+        self.models = list(dict.fromkeys([model, *(fallback_models or ["gemini-3.5-flash", "gemini-3.6-flash"])]))
         self.max_retries = max_retries
         self.retry_delay_seconds = retry_delay_seconds
         self.client = genai.Client(api_key=api_key)
@@ -57,28 +50,22 @@ class GeminiArtifactReviewer:
     def review(self, artifact: Dict[str, Any], profile: Dict[str, Any]) -> Dict[str, Any]:
         source_text = self._load_source(artifact)
         prompt = self._build_prompt(artifact, profile, source_text)
-
         response = self._generate_with_fallback(prompt, artifact.get("file_name", "unknown"))
-
         if not response.text:
             raise RuntimeError(f"Gemini returned an empty response for {artifact.get('file_name')}")
-
-        result = ArtifactReview.model_validate_json(response.text)
-        return result.model_dump()
+        return ArtifactReview.model_validate_json(response.text).model_dump()
 
     def _generate_with_fallback(self, prompt: str, artifact_name: str):
-        """Try the configured Gemini models in order for transient 503 failures."""
         last_error: Exception | None = None
-
-        for model in self.models:
+        for model_index, model in enumerate(self.models):
             for attempt in range(self.max_retries + 1):
+                print(
+                    f"Gemini review: {artifact_name} using {model} "
+                    f"(attempt {attempt + 1}/{self.max_retries + 1})",
+                    flush=True,
+                )
                 try:
-                    print(
-                        f"Gemini review: {artifact_name} using {model} "
-                        f"(attempt {attempt + 1}/{self.max_retries + 1})",
-                        flush=True,
-                    )
-                    return self.client.models.generate_content(
+                    response = self.client.models.generate_content(
                         model=model,
                         contents=prompt,
                         config=types.GenerateContentConfig(
@@ -86,52 +73,40 @@ class GeminiArtifactReviewer:
                             response_schema=ArtifactReview,
                         ),
                     )
+                    print(f"Gemini review SUCCESS: {model}", flush=True)
+                    return response
                 except errors.ServerError as exc:
+                    last_error = exc
                     if getattr(exc, "status_code", None) != 503:
                         raise
-                    last_error = exc
-                    if attempt >= self.max_retries:
-                        print(
-                            f"Gemini model {model} unavailable for {artifact_name}; "
-                            "trying next model...",
-                            flush=True,
-                        )
-                        break
-
-                    wait_seconds = self.retry_delay_seconds * (2**attempt)
-                    print(
-                        f"Gemini temporarily unavailable for {artifact_name}; "
-                        f"retry {attempt + 1}/{self.max_retries} in {wait_seconds:.1f}s...",
-                        flush=True,
-                    )
-                    time.sleep(wait_seconds)
-
+                    if attempt < self.max_retries:
+                        wait_seconds = self.retry_delay_seconds * (2 ** attempt)
+                        print(f"Gemini 503 from {model}; retrying in {wait_seconds:.1f}s...", flush=True)
+                        time.sleep(wait_seconds)
+                    else:
+                        if model_index + 1 < len(self.models):
+                            print(
+                                f"Gemini 503 from {model}; FALLBACK -> {self.models[model_index + 1]}",
+                                flush=True,
+                            )
         if last_error is not None:
             raise last_error
         raise RuntimeError("No Gemini models configured for artifact review")
 
     @staticmethod
     def _load_source(artifact: Dict[str, Any]) -> str:
-        """Load the original artifact when its canonical path is available."""
         path_value = artifact.get("path")
         if not path_value:
             return "Original source path is not available in canonical metadata."
-
         path = Path(path_value)
         if not path.is_absolute():
-            project_root = Path(__file__).resolve().parents[1]
-            path = project_root / path
-
+            path = Path(__file__).resolve().parents[1] / path
         if not path.exists() or not path.is_file():
             return f"Original source could not be loaded from: {path_value}"
-
-        text = path.read_text(encoding="utf-8", errors="replace")
-        return text[:40000]
+        return path.read_text(encoding="utf-8", errors="replace")[:40000]
 
     @staticmethod
-    def _build_prompt(
-        artifact: Dict[str, Any], profile: Dict[str, Any], source_text: str
-    ) -> str:
+    def _build_prompt(artifact: Dict[str, Any], profile: Dict[str, Any], source_text: str) -> str:
         return f"""You are the Artifact Review component of a legacy reverse-engineering Knowledge Engineering Agent.
 
 Review the supplied legacy artifact using ONLY the supplied artifact metadata, deterministic profile, and source text.

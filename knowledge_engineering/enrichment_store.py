@@ -15,8 +15,19 @@ def load_existing(path: Path) -> Dict[str, Any] | None:
         return None
 
 
+def _review_is_stale(previous: Dict[str, Any], current: Dict[str, Any]) -> bool:
+    """Detect successful reviews produced before the current review schema."""
+    if previous.get("status") != "LLM_REVIEWED":
+        return False
+    if "code_fix" not in previous:
+        return True
+    if "code_fix" not in current:
+        return False
+    return False
+
+
 def merge_enrichment(previous: Dict[str, Any] | None, current: Dict[str, Any]) -> Dict[str, Any]:
-    """Preserve successful LLM reviews while accepting current deterministic data."""
+    """Preserve successful LLM reviews while refreshing stale-schema reviews."""
     if not previous:
         return current
 
@@ -29,7 +40,7 @@ def merge_enrichment(previous: Dict[str, Any] | None, current: Dict[str, Any]) -
     for item in current.get("artifact_reviews", []):
         artifact_id = item.get("artifact_id")
         old = previous_reviews.get(artifact_id)
-        if old and old.get("status") == "LLM_REVIEWED":
+        if old and old.get("status") == "LLM_REVIEWED" and not _review_is_stale(old, item):
             merged_reviews.append(old)
         else:
             merged_reviews.append(item)

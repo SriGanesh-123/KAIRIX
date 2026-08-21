@@ -5,15 +5,8 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import Any, Dict, List, Tuple
 
+from .candidate_discovery import discover_reference_candidates
 from .schema import relationship
-
-
-def _artifact_ids(canonical: Dict[str, Any]) -> set[str]:
-    return {
-        str(item.get("artifact_id"))
-        for item in canonical.get("artifacts", [])
-        if item.get("artifact_id")
-    }
 
 
 def _entity_index(canonical: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
@@ -77,62 +70,44 @@ def _normalize_existing(canonical: Dict[str, Any]) -> List[Dict[str, Any]]:
 
 
 def _discover_cross_artifact(canonical: Dict[str, Any], existing: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Discover explicit cross-artifact edges from canonical entity provenance.
-
-    No artifact names, tables, columns, or project-specific relationships are
-    encoded here. The canonical metadata supplies the entities, ownership and
-    relationship evidence.
-    """
+    """Discover explicit cross-artifact edges from canonical metadata only."""
     entities = _entity_index(canonical)
-    known = {
-        (item["source"], item["relationship"], item["target"])
-        for item in existing
-    }
+    known = {(item["source"], item["relationship"], item["target"]) for item in existing}
     found: List[Dict[str, Any]] = []
 
+    # Preserve any explicit canonical relationship whose endpoints belong to
+    # different artifacts. This is a provenance-backed discovery signal.
     for rel in canonical.get("relationships", []):
         source_id = rel.get("source_entity_id") or rel.get("source_id") or rel.get("source")
         target_id = rel.get("target_entity_id") or rel.get("target_id") or rel.get("target")
         relation_type = rel.get("relationship_type") or rel.get("relationship") or rel.get("type")
         if not source_id or not target_id or not relation_type:
             continue
-
         source_entity = entities.get(str(source_id), {})
         target_entity = entities.get(str(target_id), {})
         source_artifact = _artifact_for_entity(source_entity) or rel.get("artifact_id")
         target_artifact = _artifact_for_entity(target_entity) or rel.get("target_artifact_id")
         if not source_artifact or not target_artifact or str(source_artifact) == str(target_artifact):
             continue
-
         key = (str(source_id), str(relation_type), str(target_id))
         if key in known:
             continue
-
         evidence_ids = rel.get("evidence_ids") if isinstance(rel.get("evidence_ids"), list) else []
         evidence = [{"evidence_id": item} for item in evidence_ids]
-        evidence.append({
-            "artifact_id": str(source_artifact),
-            "target_artifact_id": str(target_artifact),
-            "relationship_id": rel.get("id"),
-            "relationship_type": relation_type,
-        })
-
+        evidence.append({"source_artifact_id": str(source_artifact), "target_artifact_id": str(target_artifact), "relationship_id": rel.get("id"), "relationship_type": relation_type})
         found.append({
-            **relationship(
-                str(source_id),
-                str(relation_type),
-                str(target_id),
-                evidence=evidence,
-                confidence=float(rel.get("reconciled_confidence", rel.get("confidence", 0.0)) or 0.0),
-                discovery_method="canonical_entity_provenance",
-                validation_status="SUPPORTED" if rel.get("reconciliation_status") == "CANONICAL_FACT" else "UNVERIFIED",
-            ),
+            **relationship(str(source_id), str(relation_type), str(target_id), evidence=evidence,
+                           confidence=float(rel.get("reconciled_confidence", rel.get("confidence", 0.0)) or 0.0),
+                           discovery_method="canonical_entity_provenance",
+                           validation_status="SUPPORTED" if rel.get("reconciliation_status") == "CANONICAL_FACT" else "UNVERIFIED"),
             "source_artifact_id": str(source_artifact),
             "target_artifact_id": str(target_artifact),
             "canonical_relationship_id": rel.get("id"),
         })
         known.add(key)
 
+    # Add only evidence-backed cross-artifact candidates from reconciliation.
+    found.extend(discover_reference_candidates(canonical, known))
     return found
 
 
@@ -156,7 +131,7 @@ def discover(canonical: Dict[str, Any]) -> Dict[str, Any]:
         by_method[item["discovery_method"]] += 1
 
     return {
-        "schema_version": "1.1",
+        "schema_version": "1.2",
         "relationships": unique,
         "cross_artifact_relationships": cross_artifact,
         "summary": {

@@ -8,11 +8,13 @@ from pathlib import Path
 
 from .agent import KnowledgeEngineeringAgent, load_canonical, write_enrichment
 from .gemini_reviewer import GeminiArtifactReviewer
+from .summary import write_artifact_summaries
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 CANONICAL_PATH = PROJECT_ROOT / "output" / "knowledge" / "canonical_metadata.json"
 ENRICHMENT_PATH = PROJECT_ROOT / "output" / "knowledge" / "knowledge_enrichment.json"
+SUMMARY_DIR = PROJECT_ROOT / "output" / "knowledge" / "summaries"
 
 
 def _load_dotenv(path: Path) -> None:
@@ -82,6 +84,8 @@ def main() -> None:
     ).run(canonical)
     write_enrichment(ENRICHMENT_PATH, result)
 
+    summary_paths = write_artifact_summaries(result, SUMMARY_DIR)
+
     summary = result["summary"]
     print("=" * 72)
     print("KNOWLEDGE ENGINEERING AGENT")
@@ -94,6 +98,8 @@ def main() -> None:
     print(f"Parser failures       : {summary['parser_executions_failed']}")
     print(f"Knowledge gaps        : {summary['knowledge_gaps']}")
     print(f"Deeper analysis       : {summary['deeper_analysis_required']}")
+    print(f"Artifact summaries    : {len(summary_paths)}")
+    print(f"Summary directory     : {SUMMARY_DIR}")
     print(f"Output                : {ENRICHMENT_PATH}")
 
 

@@ -8,6 +8,24 @@ from typing import Any, Protocol
 from pydantic import BaseModel, Field, field_validator
 
 
+class CodeFixFinding(BaseModel):
+    """A potential source-code fix that must be handled by a developer."""
+
+    code_fix_required: bool = False
+    source_file: str = ""
+    location: str = ""
+    issue: str = ""
+    evidence: list[str] = Field(default_factory=list)
+    recommended_action: str = ""
+    action_owner: str = "DEVELOPER"
+    source_modified: bool = False
+
+    @field_validator("action_owner", mode="before")
+    @classmethod
+    def normalize_owner(cls, value: Any) -> str:
+        return str(value or "DEVELOPER").upper()
+
+
 class ArtifactReview(BaseModel):
     purpose: str = Field(description="What the artifact does in business/technical terms.")
     summary: str = Field(description="Concise explanation of the artifact's behavior.")
@@ -19,6 +37,7 @@ class ArtifactReview(BaseModel):
     confidence: float = Field(default=0.5, ge=0.0, le=1.0)
     needs_deeper_analysis: bool = False
     reason: str = ""
+    code_fix: CodeFixFinding = Field(default_factory=CodeFixFinding)
 
     @field_validator(
         "key_findings",
@@ -71,6 +90,12 @@ Review the supplied legacy artifact using ONLY the supplied artifact metadata, d
 Do not invent dependencies, business rules, or evidence. If something cannot be established, put it in semantic_gaps.
 Distinguish extracted facts from reasonable semantic interpretation. Keep confidence conservative.
 
+SOURCE INTEGRITY RULE:
+You are READ-ONLY. Never modify, rewrite, or claim to have modified the original source artifact.
+If you identify a possible code defect or code change opportunity, report it only as a developer-owned code_fix finding.
+Set source_modified to false. The developer is responsible for deciding and implementing any source-code change.
+If no code fix is supported by evidence, set code_fix_required to false and leave the other code_fix fields empty/default.
+
 ARTIFACT METADATA:
 {json.dumps(artifact, ensure_ascii=False, indent=2)}
 
@@ -81,7 +106,9 @@ ORIGINAL SOURCE (may be truncated):
 {source_text}
 
 Return JSON with: purpose, summary, key_findings, dependencies, business_rules, semantic_gaps,
-evidence_candidates, confidence (0.0-1.0), needs_deeper_analysis, and reason.
+evidence_candidates, confidence (0.0-1.0), needs_deeper_analysis, reason, and code_fix.
+The code_fix object must contain: code_fix_required, source_file, location, issue, evidence,
+recommended_action, action_owner, source_modified.
 """
 
 

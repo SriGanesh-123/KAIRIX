@@ -1,10 +1,4 @@
-"""Knowledge Engineering Agent orchestration.
-
-The agent is the technology-neutral orchestrator for the knowledge-engineering
-layer. It identifies artifacts, selects the appropriate existing parser,
-combines deterministic profiles with optional LLM review, reconciles the
-results, and records evidence and knowledge gaps for downstream analysis.
-"""
+"""Knowledge Engineering Agent orchestration."""
 
 from __future__ import annotations
 
@@ -14,6 +8,7 @@ from typing import Any, Dict, Protocol
 
 from .evidence import assess_evidence
 from .identification import identify_artifacts
+from .parser_executor import execute_parser
 from .parser_registry import select_parsers
 from .profile import build_artifact_profiles
 from .reconcile import build_reconciliation
@@ -29,10 +24,12 @@ class ArtifactReviewer(Protocol):
 class KnowledgeEngineeringAgent:
     """Orchestrate the complete knowledge-engineering control flow."""
 
-    VERSION = "0.4.0"
+    VERSION = "0.5.0"
 
-    def __init__(self, reviewer: ArtifactReviewer | None = None) -> None:
+    def __init__(self, reviewer: ArtifactReviewer | None = None, *, execute_parsers: bool = False, project_root: Path | None = None) -> None:
         self.reviewer = reviewer
+        self.execute_parsers = execute_parsers
+        self.project_root = project_root or Path(__file__).resolve().parents[1]
 
     def run(self, canonical: Dict[str, Any]) -> Dict[str, Any]:
         artifacts = canonical.get("artifacts", [])
@@ -40,13 +37,26 @@ class KnowledgeEngineeringAgent:
         # Stage 1: identify the canonical artifacts.
         identifications = identify_artifacts(artifacts)
 
-        # Stage 2: deterministically select the existing parser. The registry
-        # does not reimplement parser logic; it provides the orchestration
-        # contract over parsers already present under parsers/.
+        # Stage 2: select the existing technology-specific parser.
         parser_selections = select_parsers(artifacts)
 
-        # Stage 3-5: consume canonical deterministic knowledge, then review it
-        # with the configured LLM when available.
+        # Stage 3: optionally execute selected existing parsers. Parser logic is
+        # intentionally untouched; this adapter only invokes their entrypoints.
+        parser_executions = []
+        if self.execute_parsers:
+            for selection in parser_selections:
+                if selection.get("status") == "SELECTED":
+                    result = execute_parser(selection, self.project_root)
+                else:
+                    result = {"status": "NOT_EXECUTED", "reason": selection.get("reason")}
+                parser_executions.append({
+                    "artifact_id": selection.get("artifact_id"),
+                    "parser": selection.get("parser"),
+                    **result,
+                })
+
+        # Stage 4-7: consume deterministic knowledge, review with LLM when
+        # configured, reconcile, and validate evidence.
         profiles = build_artifact_profiles(canonical)
         reconciliation = build_reconciliation(canonical)
         evidence = assess_evidence(canonical)
@@ -56,6 +66,7 @@ class KnowledgeEngineeringAgent:
         artifacts_by_id = {item["id"]: item for item in artifacts}
         selection_by_id = {item["artifact_id"]: item for item in parser_selections}
         identification_by_id = {item["artifact_id"]: item for item in identifications}
+        execution_by_id = {item["artifact_id"]: item for item in parser_executions}
 
         for item in identifications:
             if item["status"] != "IDENTIFIED":
@@ -73,10 +84,19 @@ class KnowledgeEngineeringAgent:
                     "reason": selection["reason"],
                 })
 
+        for execution in parser_executions:
+            if execution["status"] not in {"EXECUTED", "NOT_EXECUTED"}:
+                gaps.append({
+                    "artifact_id": execution["artifact_id"],
+                    "type": "PARSER_EXECUTION",
+                    "reason": execution.get("reason", "Selected parser execution failed."),
+                })
+
         for profile in profiles:
             artifact = artifacts_by_id[profile["artifact_id"]]
             selection = selection_by_id.get(profile["artifact_id"], {})
             identification = identification_by_id.get(profile["artifact_id"], {})
+            execution = execution_by_id.get(profile["artifact_id"], {})
             review_status = "LLM_REVIEWED"
             if self.reviewer is not None:
                 try:
@@ -108,6 +128,7 @@ class KnowledgeEngineeringAgent:
                 "status": review_status,
                 "artifact_identification": identification,
                 "parser_selection": selection,
+                "parser_execution": execution,
                 **review,
             })
 
@@ -138,6 +159,11 @@ class KnowledgeEngineeringAgent:
             parser_name = selection.get("parser") or "UNSUPPORTED"
             parser_counts[parser_name] = parser_counts.get(parser_name, 0) + 1
 
+        execution_counts: dict[str, int] = {}
+        for execution in parser_executions:
+            status = execution.get("status", "UNKNOWN")
+            execution_counts[status] = execution_counts.get(status, 0) + 1
+
         return {
             "schema_version": "1.0",
             "agent": {
@@ -147,6 +173,7 @@ class KnowledgeEngineeringAgent:
                 "stages": [
                     "artifact_identification",
                     "parser_selection",
+                    "parser_execution",
                     "deterministic_profile",
                     "llm_review",
                     "reconciliation",
@@ -171,6 +198,12 @@ class KnowledgeEngineeringAgent:
                 "by_parser": parser_counts,
                 "items": parser_selections,
             },
+            "parser_execution": {
+                "enabled": self.execute_parsers,
+                "total": len(parser_executions),
+                "by_status": execution_counts,
+                "items": parser_executions,
+            },
             "artifact_profiles": profiles,
             "artifact_reviews": reviews,
             "reconciliation": reconciliation,
@@ -183,6 +216,9 @@ class KnowledgeEngineeringAgent:
                 "artifacts_identified": sum(item["status"] == "IDENTIFIED" for item in identifications),
                 "parsers_selected": sum(item["status"] == "SELECTED" for item in parser_selections),
                 "parsers_unsupported": sum(item["status"] == "UNSUPPORTED" for item in parser_selections),
+                "parser_executions": len(parser_executions),
+                "parser_executions_successful": sum(item.get("status") == "EXECUTED" for item in parser_executions),
+                "parser_executions_failed": sum(item.get("status") in {"FAILED", "TIMEOUT", "EXECUTION_ERROR"} for item in parser_executions),
                 "llm_reviews_completed": sum(item.get("status") == "LLM_REVIEWED" for item in reviews),
                 "llm_reviews_pending": sum(item.get("status") == "LLM_REVIEW_PENDING" for item in reviews),
                 "deeper_analysis_required": sum(item.get("type") == "DEEPER_ANALYSIS" for item in gaps),

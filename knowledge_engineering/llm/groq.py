@@ -30,7 +30,7 @@ class GroqReviewer(LLMReviewer):
         source = load_source(artifact)
         artifact_text = self._compact_json(artifact, 1800)
         profile_text = self._compact_json(profile, 3000)
-        remaining = max(3000, self.max_prompt_chars - len(artifact_text) - len(profile_text) - 1400)
+        remaining = max(3000, self.max_prompt_chars - len(artifact_text) - len(profile_text) - 1800)
         head = int(remaining * 0.70)
         tail = remaining - head
         if len(source) > remaining:
@@ -43,8 +43,19 @@ class GroqReviewer(LLMReviewer):
 
 Review ONLY the supplied artifact metadata, deterministic profile, and source excerpt.
 Do not invent dependencies, business rules, or evidence. Put uncertain items in semantic_gaps.
+
+SOURCE INTEGRITY RULE:
+You are READ-ONLY. Never modify, rewrite, or claim to have modified the original source artifact.
+If you identify a possible code defect or code change opportunity, report it only as a developer-owned code_fix finding.
+Set source_modified to false. The developer is responsible for deciding and implementing any source-code change.
+If no code fix is supported by evidence, set code_fix_required to false and leave the other code_fix fields empty/default.
+
 Return JSON with: purpose, summary, key_findings, dependencies, business_rules, semantic_gaps,
-evidence_candidates, confidence (0.0-1.0), needs_deeper_analysis, and reason.
+evidence_candidates, confidence (0.0-1.0), needs_deeper_analysis, reason, and code_fix.
+The code_fix object MUST contain exactly these conceptual fields:
+code_fix_required (boolean), source_file (string), location (string), issue (string),
+evidence (array of strings), recommended_action (string), action_owner (string, use DEVELOPER),
+source_modified (boolean, MUST be false).
 
 ARTIFACT METADATA:
 {artifact_text}
@@ -64,7 +75,7 @@ SOURCE EXCERPT:
                 response = self.client.chat.completions.create(
                     model=self.model,
                     messages=[
-                        {"role": "system", "content": "Return only valid JSON matching the requested review fields."},
+                        {"role": "system", "content": "Return only valid JSON matching the requested review fields, including code_fix."},
                         {"role": "user", "content": prompt},
                     ],
                     temperature=0.1,

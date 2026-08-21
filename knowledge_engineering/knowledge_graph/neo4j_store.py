@@ -29,21 +29,40 @@ def _neo4j_value(value: Any) -> Any:
 
 def _node_for_neo4j(node: Dict[str, Any]) -> Dict[str, Any]:
     payload = dict(node)
-    payload["properties_json"] = json.dumps(
-        node.get("properties", {}), ensure_ascii=False, sort_keys=True, default=str
-    )
+    payload["properties_json"] = json.dumps(node.get("properties", {}), ensure_ascii=False, sort_keys=True, default=str)
     payload.pop("properties", None)
+    # MERGE requires a non-null stable node identifier.
+    if not payload.get("id"):
+        raise ValueError("Knowledge graph node is missing a non-empty id")
     return {key: _neo4j_value(value) for key, value in payload.items()}
 
 
-def _edge_for_neo4j(edge: Dict[str, Any]) -> Dict[str, Any]:
+def _edge_for_neo4j(edge: Dict[str, Any], index: int) -> Dict[str, Any]:
     payload = dict(edge)
     for key in ("evidence", "properties"):
         if key in payload:
-            payload[f"{key}_json"] = json.dumps(
-                payload[key], ensure_ascii=False, sort_keys=True, default=str
-            )
+            payload[f"{key}_json"] = json.dumps(payload[key], ensure_ascii=False, sort_keys=True, default=str)
             payload.pop(key, None)
+    # Some relationship-discovery edges are derived objects without a
+    # canonical relationship id. Give them a deterministic, content-derived
+    # identifier rather than allowing a null Neo4j relationship key.
+    edge_id = payload.get("id")
+    if not edge_id:
+        source = payload.get("source_entity_id") or payload.get("source")
+        target = payload.get("target_entity_id") or payload.get("target")
+        rel_type = payload.get("relationship_type") or payload.get("relationship")
+        if not source or not target or not rel_type:
+            raise ValueError(f"Knowledge graph relationship at index {index} is missing stable endpoint/type fields")
+        stable = json.dumps([str(source), str(rel_type), str(target), payload.get("discovery_method", "")], ensure_ascii=False, separators=(",", ":"))
+        import hashlib
+        edge_id = f"derived-rel:{hashlib.sha256(stable.encode('utf-8')).hexdigest()[:24]}"
+        payload["id"] = edge_id
+    source_id = payload.get("source_entity_id") or payload.get("source")
+    target_id = payload.get("target_entity_id") or payload.get("target")
+    if not source_id or not target_id:
+        raise ValueError(f"Knowledge graph relationship at index {index} is missing source/target entity ids")
+    payload["source_entity_id"] = str(source_id)
+    payload["target_entity_id"] = str(target_id)
     return {key: _neo4j_value(value) for key, value in payload.items()}
 
 
@@ -81,7 +100,7 @@ class Neo4jKnowledgeGraphStore:
     def write_graph(self, graph: Dict[str, Any], *, clear_existing: bool = False) -> Dict[str, int]:
         self._require_connection()
         nodes = [_node_for_neo4j(node) for node in graph.get("nodes", [])]
-        edges = [_edge_for_neo4j(edge) for edge in graph.get("edges", [])]
+        edges = [_edge_for_neo4j(edge, index) for index, edge in enumerate(graph.get("edges", []))]
         with self._driver.session(database=self.database) as session:
             if clear_existing:
                 session.run("MATCH (n:KGNode) DETACH DELETE n")

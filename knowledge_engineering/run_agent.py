@@ -38,6 +38,11 @@ def main() -> None:
         help="Skip Gemini and run the deterministic baseline only.",
     )
     parser.add_argument(
+        "--execute-parsers",
+        action="store_true",
+        help="Execute selected existing parser modules through the agent orchestration layer.",
+    )
+    parser.add_argument(
         "--limit",
         type=int,
         default=0,
@@ -70,7 +75,11 @@ def main() -> None:
         else:
             print("GEMINI_API_KEY not found; using deterministic baseline.")
 
-    result = KnowledgeEngineeringAgent(reviewer=reviewer).run(canonical)
+    result = KnowledgeEngineeringAgent(
+        reviewer=reviewer,
+        execute_parsers=args.execute_parsers,
+        project_root=PROJECT_ROOT,
+    ).run(canonical)
     write_enrichment(ENRICHMENT_PATH, result)
 
     summary = result["summary"]
@@ -80,6 +89,9 @@ def main() -> None:
     print(f"Mode                  : {result['agent']['mode']}")
     print(f"Artifact profiles     : {summary['profiles']}")
     print(f"Artifact reviews      : {summary['reviews']}")
+    print(f"Parser executions     : {summary['parser_executions']}")
+    print(f"Parser successes      : {summary['parser_executions_successful']}")
+    print(f"Parser failures       : {summary['parser_executions_failed']}")
     print(f"Knowledge gaps        : {summary['knowledge_gaps']}")
     print(f"Deeper analysis       : {summary['deeper_analysis_required']}")
     print(f"Output                : {ENRICHMENT_PATH}")

@@ -20,8 +20,7 @@ RELATIONSHIP_TYPES = {
 
 
 def _norm(value: Any) -> str:
-    text = str(value or "").strip().lower()
-    return re.sub(r"[^a-z0-9]+", "", text)
+    return re.sub(r"[^a-z0-9]+", "", str(value or "").strip().lower())
 
 
 def _name_values(entity: Dict[str, Any]) -> List[str]:
@@ -69,38 +68,91 @@ def _artifact_name_index(canonical: Dict[str, Any]) -> Dict[str, Dict[str, Any]]
 
 
 def _cross_artifact_candidates(canonical: Dict[str, Any], existing: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Find only evidence-backed cross-artifact links already represented in metadata.
+    """Discover cross-artifact candidates from explicit metadata references.
 
-    We intentionally do not guess a relationship from string similarity alone.
-    Matching names are retained as candidate evidence, but remain UNVERIFIED.
+    The current canonical contract may contain artifact/entity references under
+    relationships, evidence, or dependency-like fields. Those references are
+    promoted into relationship candidates only when they identify two distinct
+    artifacts. Plain string similarity is never enough to make a relationship.
     """
     artifacts = canonical.get("artifacts", [])
     if len(artifacts) < 2:
         return []
-    entity_index = _entity_index(canonical.get("entities", []))
+
+    artifact_by_id = {a.get("artifact_id"): a for a in artifacts if a.get("artifact_id")}
+    artifact_by_name: Dict[str, str] = {}
+    for artifact in artifacts:
+        aid = artifact.get("artifact_id")
+        for value in (artifact.get("file_name"), artifact.get("artifact_id")):
+            key = _norm(value)
+            if aid and key:
+                artifact_by_name[key] = aid
+
     known_pairs = {(r.get("source"), r.get("relationship"), r.get("target")) for r in existing}
     candidates: List[Dict[str, Any]] = []
 
-    artifact_ids = {a.get("artifact_id") for a in artifacts}
-    for left in artifacts:
-        left_id = left.get("artifact_id")
-        left_names = [_norm(left.get("artifact_id")), _norm(left.get("file_name"))]
-        left_names = [x for x in left_names if x]
-        for name in left_names:
-            for entity in entity_index.get(name, []):
-                entity_artifact = entity.get("artifact_id") or entity.get("source_artifact_id")
-                if entity_artifact and entity_artifact != left_id and entity_artifact in artifact_ids:
-                    key = (left_id, "REFERENCES", entity.get("id") or entity.get("entity_id"))
-                    if key not in known_pairs:
-                        candidates.append({
-                            "source": left_id,
-                            "relationship": "REFERENCES",
-                            "target": entity.get("id") or entity.get("entity_id") or entity.get("name"),
-                            "evidence": [{"type": "cross_artifact_name_match", "artifact_id": left_id, "matched_value": name}],
-                            "confidence": 0.50,
-                            "discovery_method": "cross_artifact_matching",
-                            "validation_status": "UNVERIFIED",
-                        })
+    def add_candidate(source: Any, relationship: str, target: Any, evidence: Any, confidence: float = 0.55) -> None:
+        source_id = source if source in artifact_by_id else artifact_by_name.get(_norm(source))
+        target_id = target if target in artifact_by_id else artifact_by_name.get(_norm(target))
+        if not source_id or not target_id or source_id == target_id:
+            return
+        key = (source_id, relationship, target_id)
+        if key in known_pairs:
+            return
+        candidates.append({
+            "source": source_id,
+            "relationship": relationship,
+            "target": target_id,
+            "evidence": evidence if isinstance(evidence, list) else [evidence],
+            "confidence": confidence,
+            "discovery_method": "canonical_cross_artifact_reference",
+            "validation_status": "UNVERIFIED",
+        })
+        known_pairs.add(key)
+
+    # Inspect generic reference-bearing fields from artifacts and existing
+    # metadata. No project-specific field names are required beyond common
+    # structural names already present in the canonical contract.
+    reference_fields = ("depends_on", "dependency_ids", "source_artifact_id", "target_artifact_id", "artifact_references", "references")
+    for artifact in artifacts:
+        source_id = artifact.get("artifact_id")
+        for field in reference_fields:
+            values = artifact.get(field, [])
+            if values is None:
+                continue
+            if not isinstance(values, list):
+                values = [values]
+            for value in values:
+                if isinstance(value, dict):
+                    target = value.get("artifact_id") or value.get("target_artifact_id") or value.get("file_name") or value.get("name")
+                    relationship = value.get("relationship") or value.get("type") or "DEPENDS_ON"
+                    evidence = value.get("evidence") or {"field": field, "value": value}
+                else:
+                    target = value
+                    relationship = "DEPENDS_ON"
+                    evidence = {"field": field, "value": value}
+                add_candidate(source_id, relationship, target, evidence)
+
+    # Dependency/reference information can also appear on canonical entities.
+    for entity in canonical.get("entities", []):
+        source_artifact = entity.get("artifact_id") or entity.get("source_artifact_id")
+        for field in reference_fields:
+            values = entity.get(field, [])
+            if values is None:
+                continue
+            if not isinstance(values, list):
+                values = [values]
+            for value in values:
+                target = value.get("artifact_id") if isinstance(value, dict) else value
+                if isinstance(value, dict):
+                    target = target or value.get("target_artifact_id") or value.get("file_name")
+                    relationship = value.get("relationship") or value.get("type") or "REFERENCES"
+                    evidence = value.get("evidence") or {"field": field, "entity_id": entity.get("id"), "value": value}
+                else:
+                    relationship = "REFERENCES"
+                    evidence = {"field": field, "entity_id": entity.get("id"), "value": value}
+                add_candidate(source_artifact, relationship, target, evidence, 0.50)
+
     return candidates
 
 
@@ -111,7 +163,6 @@ def discover_relationships(canonical_metadata: Dict[str, Any]) -> Dict[str, Any]
     candidates = _cross_artifact_candidates(canonical, existing)
     all_relationships = existing + candidates
 
-    # Deduplicate without assuming any project-specific identifiers.
     seen: set[Tuple[Any, Any, Any]] = set()
     relationships: List[Dict[str, Any]] = []
     for rel in all_relationships:
@@ -131,8 +182,8 @@ def discover_relationships(canonical_metadata: Dict[str, Any]) -> Dict[str, Any]
         by_method[str(rel.get("discovery_method"))] += 1
 
     return {
-        "schema_version": "1.0",
-        "agent": {"name": "relationship_discovery", "version": "1.0.0", "artifact_specific_hardcoding": False},
+        "schema_version": "1.1",
+        "agent": {"name": "relationship_discovery", "version": "1.1.0", "artifact_specific_hardcoding": False},
         "source": {"canonical_schema_version": canonical.get("schema_version", "1.0"), "artifact_count": len(canonical.get("artifacts", []))},
         "relationship_types": sorted(RELATIONSHIP_TYPES),
         "relationships": relationships,

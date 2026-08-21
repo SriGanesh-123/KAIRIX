@@ -24,7 +24,7 @@ class ArtifactReviewer(Protocol):
 class KnowledgeEngineeringAgent:
     """Orchestrate the complete knowledge-engineering control flow."""
 
-    VERSION = "0.5.0"
+    VERSION = "0.6.0"
 
     def __init__(self, reviewer: ArtifactReviewer | None = None, *, execute_parsers: bool = False, project_root: Path | None = None) -> None:
         self.reviewer = reviewer
@@ -34,14 +34,9 @@ class KnowledgeEngineeringAgent:
     def run(self, canonical: Dict[str, Any]) -> Dict[str, Any]:
         artifacts = canonical.get("artifacts", [])
 
-        # Stage 1: identify the canonical artifacts.
         identifications = identify_artifacts(artifacts)
-
-        # Stage 2: select the existing technology-specific parser.
         parser_selections = select_parsers(artifacts)
 
-        # Stage 3: optionally execute selected existing parsers. Parser logic is
-        # intentionally untouched; this adapter only invokes their entrypoints.
         parser_executions = []
         if self.execute_parsers:
             for selection in parser_selections:
@@ -55,10 +50,7 @@ class KnowledgeEngineeringAgent:
                     **result,
                 })
 
-        # Stage 4-7: consume deterministic knowledge, review with LLM when
-        # configured, reconcile, and validate evidence.
         profiles = build_artifact_profiles(canonical)
-        reconciliation = build_reconciliation(canonical)
         evidence = assess_evidence(canonical)
 
         reviews = []
@@ -146,6 +138,9 @@ class KnowledgeEngineeringAgent:
                     "reason": "LLM provider unavailable; review is pending retry.",
                 })
 
+        # Reconciliation must run after LLM reviews so it can compare
+        # deterministic facts with semantic findings and evidence coverage.
+        reconciliation = build_reconciliation(canonical, reviews, evidence)
         for group in reconciliation.get("duplicate_groups", []):
             gaps.append({
                 "type": "DUPLICATE_ENTITY_CANDIDATE",
@@ -153,6 +148,17 @@ class KnowledgeEngineeringAgent:
                 "normalized_name": group["canonical_name"],
                 "entity_ids": group["entity_ids"],
             })
+        for item in reconciliation.get("artifact_assessments", []):
+            if item.get("status") in {"PARTIAL", "CONFLICT"}:
+                gaps.append({
+                    "artifact_id": item.get("artifact_id"),
+                    "type": "RECONCILIATION",
+                    "reason": (
+                        "Deterministic facts and LLM findings require validation/investigation."
+                        if item.get("status") == "PARTIAL"
+                        else "Potential conflict detected between deterministic knowledge and LLM findings."
+                    ),
+                })
 
         parser_counts: dict[str, int] = {}
         for selection in parser_selections:
@@ -165,7 +171,7 @@ class KnowledgeEngineeringAgent:
             execution_counts[status] = execution_counts.get(status, 0) + 1
 
         return {
-            "schema_version": "1.0",
+            "schema_version": "1.1",
             "agent": {
                 "name": "knowledge_engineering_agent",
                 "version": self.VERSION,
@@ -222,6 +228,10 @@ class KnowledgeEngineeringAgent:
                 "llm_reviews_completed": sum(item.get("status") == "LLM_REVIEWED" for item in reviews),
                 "llm_reviews_pending": sum(item.get("status") == "LLM_REVIEW_PENDING" for item in reviews),
                 "deeper_analysis_required": sum(item.get("type") == "DEEPER_ANALYSIS" for item in gaps),
+                "reconciliation_claims_assessed": reconciliation.get("summary", {}).get("claims_assessed", 0),
+                "reconciliation_claims_supported": reconciliation.get("summary", {}).get("claims_supported", 0),
+                "reconciliation_claims_unverified": reconciliation.get("summary", {}).get("claims_unverified", 0),
+                "reconciliation_potential_conflicts": reconciliation.get("summary", {}).get("potential_conflicts", 0),
             },
         }
 

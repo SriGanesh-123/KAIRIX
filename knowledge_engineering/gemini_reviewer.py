@@ -33,7 +33,7 @@ class GeminiArtifactReviewer:
     def __init__(
         self,
         api_key: str,
-        model: str = "gemini-3.5-flash-lite",
+        model: str = "gemini-3.6-flash",
         fallback_models: list[str] | None = None,
         max_retries: int = 1,
         retry_delay_seconds: float = 2.0,
@@ -44,7 +44,7 @@ class GeminiArtifactReviewer:
             raise ValueError("max_retries must be >= 0")
         self.models = list(
             dict.fromkeys(
-                [model, *(fallback_models or ["gemini-3.5-flash", "gemini-3.6-flash"])]
+                [model, *(fallback_models or ["gemini-3.5-flash", "gemini-3.5-flash-lite"])]
             )
         )
         self.max_retries = max_retries

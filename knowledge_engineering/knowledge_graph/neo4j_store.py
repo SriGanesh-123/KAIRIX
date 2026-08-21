@@ -1,0 +1,111 @@
+"""Neo4j persistence for the canonical knowledge graph.
+
+The store contains no domain-specific entities or relationship names. All graph
+facts are supplied by the validated canonical/relationship-discovery payload.
+"""
+
+from __future__ import annotations
+
+import os
+from typing import Any, Dict, Iterable, List
+
+try:
+    from neo4j import GraphDatabase
+except ImportError:  # pragma: no cover
+    GraphDatabase = None
+
+
+class Neo4jKnowledgeGraphStore:
+    """Persist graph nodes and edges into Neo4j using idempotent MERGE operations."""
+
+    def __init__(self, uri: str | None = None, username: str | None = None, password: str | None = None, database: str | None = None) -> None:
+        self.uri = uri or os.getenv("NEO4J_URI")
+        self.username = username or os.getenv("NEO4J_USERNAME", "neo4j")
+        self.password = password or os.getenv("NEO4J_PASSWORD")
+        self.database = database or os.getenv("NEO4J_DATABASE", "neo4j")
+        self._driver = None
+
+    @property
+    def configured(self) -> bool:
+        return bool(GraphDatabase and self.uri and self.password)
+
+    def connect(self) -> None:
+        if not self.configured:
+            raise RuntimeError("Neo4j is not configured. Set NEO4J_URI and NEO4J_PASSWORD (and optionally NEO4J_USERNAME/NEO4J_DATABASE).")
+        self._driver = GraphDatabase.driver(self.uri, auth=(self.username, self.password))
+        self._driver.verify_connectivity()
+
+    def close(self) -> None:
+        if self._driver is not None:
+            self._driver.close()
+            self._driver = None
+
+    def initialize_constraints(self) -> None:
+        self._require_connection()
+        with self._driver.session(database=self.database) as session:
+            session.run("CREATE CONSTRAINT kg_node_id IF NOT EXISTS FOR (n:KGNode) REQUIRE n.id IS UNIQUE")
+            session.run("CREATE CONSTRAINT kg_edge_id IF NOT EXISTS FOR ()-[r:KG_RELATIONSHIP]-() REQUIRE r.id IS UNIQUE")
+
+    def write_graph(self, graph: Dict[str, Any], *, clear_existing: bool = False) -> Dict[str, int]:
+        self._require_connection()
+        nodes = graph.get("nodes", [])
+        edges = graph.get("edges", [])
+        with self._driver.session(database=self.database) as session:
+            if clear_existing:
+                session.run("MATCH (n:KGNode) DETACH DELETE n")
+            session.execute_write(self._write_nodes, nodes)
+            session.execute_write(self._write_edges, edges)
+        return self.counts()
+
+    @staticmethod
+    def _write_nodes(tx: Any, nodes: Iterable[Dict[str, Any]]) -> None:
+        query = """
+        UNWIND $nodes AS node
+        MERGE (n:KGNode {id: node.id})
+        SET n.type = node.type,
+            n.name = node.name,
+            n.artifact_id = node.artifact_id,
+            n.properties = node.properties,
+            n.source_confidence = node.source_confidence,
+            n.reconciled_confidence = node.reconciled_confidence
+        """
+        tx.run(query, nodes=list(nodes))
+
+    @staticmethod
+    def _write_edges(tx: Any, edges: Iterable[Dict[str, Any]]) -> None:
+        query = """
+        UNWIND $edges AS edge
+        MATCH (s:KGNode {id: edge.source_entity_id})
+        MATCH (t:KGNode {id: edge.target_entity_id})
+        MERGE (s)-[r:KG_RELATIONSHIP {id: edge.id}]->(t)
+        SET r.relationship_type = edge.relationship_type,
+            r.artifact_id = edge.artifact_id,
+            r.source_artifact_id = edge.source_artifact_id,
+            r.target_artifact_id = edge.target_artifact_id,
+            r.evidence_ids = edge.evidence_ids,
+            r.evidence = edge.evidence,
+            r.properties = edge.properties,
+            r.confidence = edge.confidence,
+            r.validation_status = edge.validation_status,
+            r.discovery_method = edge.discovery_method
+        """
+        tx.run(query, edges=list(edges))
+
+    def counts(self) -> Dict[str, int]:
+        self._require_connection()
+        with self._driver.session(database=self.database) as session:
+            node_count = session.run("MATCH (n:KGNode) RETURN count(n) AS count").single()["count"]
+            edge_count = session.run("MATCH ()-[r:KG_RELATIONSHIP]->() RETURN count(r) AS count").single()["count"]
+            rows = session.run("MATCH ()-[r:KG_RELATIONSHIP]->() RETURN r.validation_status AS status, count(r) AS count")
+            by_status = {row["status"]: row["count"] for row in rows}
+        return {
+            "nodes": node_count,
+            "edges": edge_count,
+            "supported": by_status.get("SUPPORTED", 0),
+            "unverified": by_status.get("UNVERIFIED", 0),
+            "conflicts": by_status.get("CONFLICT", 0),
+        }
+
+    def _require_connection(self) -> None:
+        if self._driver is None:
+            raise RuntimeError("Neo4j store is not connected. Call connect() first.")

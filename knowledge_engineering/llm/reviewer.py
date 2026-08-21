@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from typing import Any, Protocol
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class ArtifactReview(BaseModel):
@@ -19,6 +19,41 @@ class ArtifactReview(BaseModel):
     confidence: float = Field(default=0.5, ge=0.0, le=1.0)
     needs_deeper_analysis: bool = False
     reason: str = ""
+
+    @field_validator(
+        "key_findings",
+        "dependencies",
+        "business_rules",
+        "semantic_gaps",
+        "evidence_candidates",
+        mode="before",
+    )
+    @classmethod
+    def normalize_review_items(cls, value: Any) -> list[str]:
+        """Accept strings or structured objects returned by different LLMs.
+
+        The canonical enrichment schema remains list[str], but providers may
+        return richer JSON objects. Convert those objects to stable JSON text
+        instead of rejecting an otherwise valid review.
+        """
+        if value is None:
+            return []
+        if isinstance(value, (str, int, float, bool)):
+            return [str(value)]
+        if isinstance(value, dict):
+            value = [value]
+        if not isinstance(value, list):
+            return [str(value)]
+
+        normalized: list[str] = []
+        for item in value:
+            if isinstance(item, str):
+                normalized.append(item)
+            elif isinstance(item, dict):
+                normalized.append(json.dumps(item, ensure_ascii=False, sort_keys=True))
+            else:
+                normalized.append(str(item))
+        return normalized
 
 
 class LLMReviewer(Protocol):

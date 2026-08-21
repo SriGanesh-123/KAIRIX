@@ -1,18 +1,50 @@
 """Neo4j persistence for the canonical knowledge graph.
 
-The store contains no domain-specific entities or relationship names. All graph
-facts are supplied by the validated canonical/relationship-discovery payload.
+All graph facts are supplied by the validated canonical/relationship-discovery
+payload. Nested values are serialized generically so no domain-specific fields
+are hardcoded into the persistence layer.
 """
 
 from __future__ import annotations
 
+import json
 import os
-from typing import Any, Dict, Iterable, List
+from typing import Any, Dict, Iterable
 
 try:
     from neo4j import GraphDatabase
 except ImportError:  # pragma: no cover
     GraphDatabase = None
+
+
+def _neo4j_value(value: Any) -> Any:
+    """Convert arbitrary JSON-compatible values to Neo4j property values."""
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, list):
+        if all(item is None or isinstance(item, (str, int, float, bool)) for item in value):
+            return value
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
+
+
+def _node_for_neo4j(node: Dict[str, Any]) -> Dict[str, Any]:
+    payload = dict(node)
+    payload["properties_json"] = json.dumps(
+        node.get("properties", {}), ensure_ascii=False, sort_keys=True, default=str
+    )
+    payload.pop("properties", None)
+    return {key: _neo4j_value(value) for key, value in payload.items()}
+
+
+def _edge_for_neo4j(edge: Dict[str, Any]) -> Dict[str, Any]:
+    payload = dict(edge)
+    for key in ("evidence", "properties"):
+        if key in payload:
+            payload[f"{key}_json"] = json.dumps(
+                payload[key], ensure_ascii=False, sort_keys=True, default=str
+            )
+            payload.pop(key, None)
+    return {key: _neo4j_value(value) for key, value in payload.items()}
 
 
 class Neo4jKnowledgeGraphStore:
@@ -48,8 +80,8 @@ class Neo4jKnowledgeGraphStore:
 
     def write_graph(self, graph: Dict[str, Any], *, clear_existing: bool = False) -> Dict[str, int]:
         self._require_connection()
-        nodes = graph.get("nodes", [])
-        edges = graph.get("edges", [])
+        nodes = [_node_for_neo4j(node) for node in graph.get("nodes", [])]
+        edges = [_edge_for_neo4j(edge) for edge in graph.get("edges", [])]
         with self._driver.session(database=self.database) as session:
             if clear_existing:
                 session.run("MATCH (n:KGNode) DETACH DELETE n")
@@ -65,7 +97,7 @@ class Neo4jKnowledgeGraphStore:
         SET n.type = node.type,
             n.name = node.name,
             n.artifact_id = node.artifact_id,
-            n.properties = node.properties,
+            n.properties_json = node.properties_json,
             n.source_confidence = node.source_confidence,
             n.reconciled_confidence = node.reconciled_confidence
         """
@@ -83,8 +115,8 @@ class Neo4jKnowledgeGraphStore:
             r.source_artifact_id = edge.source_artifact_id,
             r.target_artifact_id = edge.target_artifact_id,
             r.evidence_ids = edge.evidence_ids,
-            r.evidence = edge.evidence,
-            r.properties = edge.properties,
+            r.evidence_json = edge.evidence_json,
+            r.properties_json = edge.properties_json,
             r.confidence = edge.confidence,
             r.validation_status = edge.validation_status,
             r.discovery_method = edge.discovery_method

@@ -2,5 +2,6 @@
 
 from .agent import KnowledgeGraphAgent
 from .neo4j_store import Neo4jKnowledgeGraphStore
+from .query import KnowledgeGraphQuery
 
-__all__ = ["KnowledgeGraphAgent", "Neo4jKnowledgeGraphStore"]
+__all__ = ["KnowledgeGraphAgent", "KnowledgeGraphQuery", "Neo4jKnowledgeGraphStore"]

@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Tuple
 
 from .candidate_discovery import discover_reference_candidates
 from .schema import relationship
+from .validator import validate_relationships
 
 
 def _entity_index(canonical: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
@@ -108,47 +109,13 @@ def _discover_cross_artifact(canonical: Dict[str, Any], existing: List[Dict[str,
     return found
 
 
-def _validate_relationships(relationships: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Validate without inventing evidence or upgrading ambiguous candidates."""
-    validated: List[Dict[str, Any]] = []
-    for item in relationships:
-        result = dict(item)
-        evidence = item.get("evidence", [])
-        status = str(item.get("validation_status", "UNVERIFIED"))
-
-        if status == "SUPPORTED":
-            result["validation_status"] = "SUPPORTED"
-        elif item.get("discovery_method") == "canonical_reference_match":
-            confidence = float(item.get("confidence", 0.0) or 0.0)
-            candidate_ids = []
-            for evidence_item in evidence if isinstance(evidence, list) else []:
-                if not isinstance(evidence_item, dict):
-                    continue
-                reference_match = evidence_item.get("reference_match")
-                if isinstance(reference_match, dict) and reference_match.get("candidate_entity_id"):
-                    candidate_ids.append(str(reference_match["candidate_entity_id"]))
-            result["validation_status"] = (
-                "SUPPORTED" if len(set(candidate_ids)) == 1 and confidence >= 0.75 else "UNVERIFIED"
-            )
-        elif status in {"UNVERIFIED", "CONFLICT"}:
-            result["validation_status"] = status
-        else:
-            result["validation_status"] = "UNVERIFIED"
-
-        if isinstance(evidence, list) and any(
-            isinstance(evidence_item, dict) and evidence_item.get("conflict") is True
-            for evidence_item in evidence
-        ):
-            result["validation_status"] = "CONFLICT"
-        validated.append(result)
-    return validated
-
-
 def discover(canonical: Dict[str, Any]) -> Dict[str, Any]:
     existing = _normalize_existing(canonical)
     cross_artifact = _discover_cross_artifact(canonical, existing)
 
-    all_relationships = _validate_relationships(existing + cross_artifact)
+    validated_result = validate_relationships(canonical, existing + cross_artifact)
+    all_relationships = validated_result["relationships"]
+
     unique: List[Dict[str, Any]] = []
     seen: set[Tuple[str, str, str]] = set()
     for item in all_relationships:
@@ -174,9 +141,10 @@ def discover(canonical: Dict[str, Any]) -> Dict[str, Any]:
         by_method[item["discovery_method"]] += 1
 
     return {
-        "schema_version": "1.2",
+        "schema_version": "1.3",
         "relationships": unique,
         "cross_artifact_relationships": validated_cross_artifact,
+        "validation": validated_result["summary"],
         "summary": {
             "relationships_discovered": len(unique),
             "cross_artifact_discovered": len(validated_cross_artifact),

@@ -12,10 +12,9 @@ from .reviewer import ArtifactReview, LLMReviewer, build_prompt, load_source
 class GroqReviewer(LLMReviewer):
     provider = "groq"
 
-    # Groq free/on-demand limits can be reached by large prompts. Keep a
-    # conservative character budget for the combined metadata/profile/source.
-    # This is configurable later if a higher service tier is used.
-    max_prompt_chars = 26000
+    # Keep a large safety margin below the 8K TPM free/on-demand limit because
+    # the request includes both system instructions and the user prompt.
+    max_prompt_chars = 17000
 
     def __init__(self, api_key: str, model: str, max_retries: int = 1) -> None:
         self.api_key = api_key
@@ -29,16 +28,12 @@ class GroqReviewer(LLMReviewer):
         if len(full_prompt) <= self.max_prompt_chars:
             return full_prompt
 
-        # Preserve the deterministic metadata/profile and the beginning/end of
-        # the source so joins, CASE logic, filters, and query structure are not
-        # discarded wholesale. Explicitly tell the model that source was
-        # bounded so it does not infer missing sections.
         marker = (
             "\n\n[ORIGINAL SOURCE CONTEXT BOUNDED FOR MODEL LIMITS. "
             "The omitted middle section must not be inferred.]\n\n"
         )
         remaining = self.max_prompt_chars - len(marker)
-        head_chars = int(remaining * 0.65)
+        head_chars = int(remaining * 0.60)
         tail_chars = remaining - head_chars
         bounded_source = source[:head_chars] + marker + source[-tail_chars:]
         return build_prompt(artifact, profile, bounded_source)

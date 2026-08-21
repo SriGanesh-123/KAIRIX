@@ -1,10 +1,4 @@
-"""Retry only artifact reviews that are marked LLM_REVIEW_PENDING.
-
-This command deliberately does not rerun already successful LLM reviews. It reads
-an existing knowledge_enrichment.json, finds pending artifact IDs, loads the
-corresponding canonical artifacts/profiles, and replaces only those pending
-reviews after a successful Gemini call.
-"""
+"""Retry only artifact reviews that are marked LLM_REVIEW_PENDING."""
 
 from __future__ import annotations
 
@@ -14,7 +8,8 @@ import os
 from pathlib import Path
 from typing import Any
 
-from .gemini_reviewer import GeminiArtifactReviewer
+from .llm.factory import create_reviewer
+from .llm.config import load_llm_config
 from .profile import build_artifact_profiles
 
 
@@ -53,9 +48,11 @@ def retry_pending(*, max_artifacts: int = 0) -> int:
     if not ENRICHMENT_PATH.exists():
         raise SystemExit(f"Knowledge enrichment not found: {ENRICHMENT_PATH}")
 
-    api_key = os.getenv("GEMINI_API_KEY", "").strip()
-    if not api_key:
-        raise SystemExit("GEMINI_API_KEY not found in environment/.env")
+    config = load_llm_config()
+    if not config:
+        raise SystemExit(
+            "LLM configuration missing. Set LLM_PROVIDER, LLM_MODEL and LLM_API_KEY, or use --deterministic."
+        )
 
     canonical = _load(CANONICAL_PATH)
     enrichment = _load(ENRICHMENT_PATH)
@@ -65,6 +62,7 @@ def retry_pending(*, max_artifacts: int = 0) -> int:
     if max_artifacts:
         pending = pending[:max_artifacts]
 
+    print(f"LLM selected: {config.provider}/{config.model}")
     print(f"Pending LLM reviews found: {len(pending)}")
     if not pending:
         print("Nothing to retry. Existing enrichment contains no LLM_REVIEW_PENDING artifacts.")
@@ -76,7 +74,7 @@ def retry_pending(*, max_artifacts: int = 0) -> int:
     artifacts_by_id = {item["id"]: item for item in artifacts}
     profiles_by_id = {item["artifact_id"]: item for item in profiles}
 
-    reviewer = GeminiArtifactReviewer(api_key=api_key)
+    reviewer = create_reviewer(config)
     replaced = 0
 
     for old_review in pending:
@@ -119,7 +117,6 @@ def retry_pending(*, max_artifacts: int = 0) -> int:
         item.get("status") == "LLM_REVIEW_PENDING" for item in reviews
     )
 
-    # Remove only the LLM-pending gap entries that have now been resolved.
     resolved_ids = {
         item.get("artifact_id")
         for item in reviews
@@ -142,7 +139,7 @@ def retry_pending(*, max_artifacts: int = 0) -> int:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Retry only pending Gemini artifact reviews")
+    parser = argparse.ArgumentParser(description="Retry pending artifact reviews using the configured LLM provider")
     parser.add_argument("--limit", type=int, default=0, help="Retry at most N pending reviews (0 = all pending)")
     args = parser.parse_args()
     if args.limit < 0:

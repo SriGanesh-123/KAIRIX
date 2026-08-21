@@ -75,8 +75,6 @@ def _discover_cross_artifact(canonical: Dict[str, Any], existing: List[Dict[str,
     known = {(item["source"], item["relationship"], item["target"]) for item in existing}
     found: List[Dict[str, Any]] = []
 
-    # Preserve any explicit canonical relationship whose endpoints belong to
-    # different artifacts. This is a provenance-backed discovery signal.
     for rel in canonical.get("relationships", []):
         source_id = rel.get("source_entity_id") or rel.get("source_id") or rel.get("source")
         target_id = rel.get("target_entity_id") or rel.get("target_id") or rel.get("target")
@@ -106,23 +104,68 @@ def _discover_cross_artifact(canonical: Dict[str, Any], existing: List[Dict[str,
         })
         known.add(key)
 
-    # Add only evidence-backed cross-artifact candidates from reconciliation.
     found.extend(discover_reference_candidates(canonical, known))
     return found
+
+
+def _validate_relationships(relationships: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Validate without inventing evidence or upgrading ambiguous candidates."""
+    validated: List[Dict[str, Any]] = []
+    for item in relationships:
+        result = dict(item)
+        evidence = item.get("evidence", [])
+        status = str(item.get("validation_status", "UNVERIFIED"))
+
+        if status == "SUPPORTED":
+            result["validation_status"] = "SUPPORTED"
+        elif item.get("discovery_method") == "canonical_reference_match":
+            confidence = float(item.get("confidence", 0.0) or 0.0)
+            candidate_ids = []
+            for evidence_item in evidence if isinstance(evidence, list) else []:
+                if not isinstance(evidence_item, dict):
+                    continue
+                reference_match = evidence_item.get("reference_match")
+                if isinstance(reference_match, dict) and reference_match.get("candidate_entity_id"):
+                    candidate_ids.append(str(reference_match["candidate_entity_id"]))
+            result["validation_status"] = (
+                "SUPPORTED" if len(set(candidate_ids)) == 1 and confidence >= 0.75 else "UNVERIFIED"
+            )
+        elif status in {"UNVERIFIED", "CONFLICT"}:
+            result["validation_status"] = status
+        else:
+            result["validation_status"] = "UNVERIFIED"
+
+        if isinstance(evidence, list) and any(
+            isinstance(evidence_item, dict) and evidence_item.get("conflict") is True
+            for evidence_item in evidence
+        ):
+            result["validation_status"] = "CONFLICT"
+        validated.append(result)
+    return validated
 
 
 def discover(canonical: Dict[str, Any]) -> Dict[str, Any]:
     existing = _normalize_existing(canonical)
     cross_artifact = _discover_cross_artifact(canonical, existing)
 
+    all_relationships = _validate_relationships(existing + cross_artifact)
     unique: List[Dict[str, Any]] = []
     seen: set[Tuple[str, str, str]] = set()
-    for item in existing + cross_artifact:
+    for item in all_relationships:
         key = (item["source"], item["relationship"], item["target"])
         if key in seen:
             continue
         seen.add(key)
         unique.append(item)
+
+    cross_keys = {
+        (item["source"], item["relationship"], item["target"])
+        for item in cross_artifact
+    }
+    validated_cross_artifact = [
+        item for item in unique
+        if (item["source"], item["relationship"], item["target"]) in cross_keys
+    ]
 
     by_type: Dict[str, int] = defaultdict(int)
     by_method: Dict[str, int] = defaultdict(int)
@@ -133,10 +176,10 @@ def discover(canonical: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "schema_version": "1.2",
         "relationships": unique,
-        "cross_artifact_relationships": cross_artifact,
+        "cross_artifact_relationships": validated_cross_artifact,
         "summary": {
             "relationships_discovered": len(unique),
-            "cross_artifact_discovered": len(cross_artifact),
+            "cross_artifact_discovered": len(validated_cross_artifact),
             "supported": sum(item["validation_status"] == "SUPPORTED" for item in unique),
             "unverified": sum(item["validation_status"] == "UNVERIFIED" for item in unique),
             "conflicts": sum(item["validation_status"] == "CONFLICT" for item in unique),

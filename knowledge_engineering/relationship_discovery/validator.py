@@ -6,19 +6,11 @@ from typing import Any, Dict, List
 
 
 def _entity_index(canonical: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
-    return {
-        str(item.get("id")): item
-        for item in canonical.get("entities", [])
-        if item.get("id")
-    }
+    return {str(item.get("id")): item for item in canonical.get("entities", []) if item.get("id")}
 
 
 def _artifact_index(canonical: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
-    return {
-        str(item.get("id")): item
-        for item in canonical.get("artifacts", [])
-        if item.get("id")
-    }
+    return {str(item.get("id")): item for item in canonical.get("artifacts", []) if item.get("id")}
 
 
 def _candidate_evidence(candidate: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -26,20 +18,23 @@ def _candidate_evidence(candidate: Dict[str, Any]) -> List[Dict[str, Any]]:
     return evidence if isinstance(evidence, list) else []
 
 
-def validate_relationships(canonical: Dict[str, Any], candidates: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """Validate candidates using only canonical metadata evidence.
-
-    Candidates are never promoted merely because they exist. A candidate is
-    SUPPORTED only when its source/target entities resolve to different known
-    artifacts and it carries explicit reference evidence. Otherwise it remains
-    UNVERIFIED. No source artifacts are modified.
-    """
+def validate_relationships(canonical: Dict[str, Any], relationships: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Validate only newly discovered candidates; preserve canonical facts."""
     entities = _entity_index(canonical)
     artifacts = _artifact_index(canonical)
     validated: List[Dict[str, Any]] = []
 
-    for candidate in candidates:
+    for candidate in relationships:
         item = dict(candidate)
+
+        # Reconciled canonical facts are already authoritative and must not be
+        # downgraded by the candidate validator.
+        if candidate.get("validation_status") == "SUPPORTED" and candidate.get("discovery_method") == "canonical_metadata":
+            item["validation_status"] = "SUPPORTED"
+            item["validation_reason"] = "Canonical reconciliation marked this relationship as CANONICAL_FACT."
+            validated.append(item)
+            continue
+
         source = entities.get(str(candidate.get("source", "")), {})
         target = entities.get(str(candidate.get("target", "")), {})
         source_artifact = candidate.get("source_artifact_id") or source.get("artifact_id")
@@ -74,7 +69,7 @@ def validate_relationships(canonical: Dict[str, Any], candidates: List[Dict[str,
         validated.append(item)
 
     return {
-        "schema_version": "1.0",
+        "schema_version": "1.1",
         "relationships": validated,
         "summary": {
             "validated": len(validated),
@@ -82,8 +77,5 @@ def validate_relationships(canonical: Dict[str, Any], candidates: List[Dict[str,
             "unverified": sum(item["validation_status"] == "UNVERIFIED" for item in validated),
             "conflicts": sum(item["validation_status"] == "CONFLICT" for item in validated),
         },
-        "safety": {
-            "artifact_specific_hardcoding": False,
-            "source_modified": False,
-        },
+        "safety": {"artifact_specific_hardcoding": False, "source_modified": False},
     }

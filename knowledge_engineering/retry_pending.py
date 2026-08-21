@@ -8,8 +8,8 @@ import os
 from pathlib import Path
 from typing import Any
 
+from .llm.config import LLMConfig
 from .llm.factory import create_reviewer
-from .llm.config import load_llm_config
 from .profile import build_artifact_profiles
 
 
@@ -48,10 +48,11 @@ def retry_pending(*, max_artifacts: int = 0) -> int:
     if not ENRICHMENT_PATH.exists():
         raise SystemExit(f"Knowledge enrichment not found: {ENRICHMENT_PATH}")
 
-    config = load_llm_config()
-    if not config:
+    config = LLMConfig.from_env()
+    if config is None:
         raise SystemExit(
-            "LLM configuration missing. Set LLM_PROVIDER, LLM_MODEL and LLM_API_KEY, or use --deterministic."
+            "LLM configuration missing. Set LLM_PROVIDER, LLM_MODEL and LLM_API_KEY "
+            "(or provider-specific API key), or use --deterministic."
         )
 
     canonical = _load(CANONICAL_PATH)

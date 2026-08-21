@@ -1,0 +1,4817 @@
+{
+    "file": "EARNPREM.CBL",
+    "program_id": "EARNPREM",
+    "parser": {
+        "name": "Tree-sitter",
+        "language": "COBOL",
+        "grammar": "tree-sitter-language-pack"
+    },
+    "root": "start",
+    "has_errors": false,
+    "divisions": [
+        {
+            "type": "identification_division",
+            "text": "IDENTIFICATION DIVISION.",
+            "start_line": 1
+        },
+        {
+            "type": "environment_division",
+            "text": "ENVIRONMENT DIVISION.",
+            "start_line": 29
+        },
+        {
+            "type": "data_division",
+            "text": "DATA DIVISION.",
+            "start_line": 51
+        },
+        {
+            "type": "procedure_division",
+            "text": "PROCEDURE DIVISION.",
+            "start_line": 203
+        }
+    ],
+    "sections": [
+        {
+            "text": "INPUT-OUTPUT SECTION.",
+            "start_line": 30
+        },
+        {
+            "text": "FILE SECTION.",
+            "start_line": 52
+        },
+        {
+            "text": "WORKING-STORAGE SECTION.",
+            "start_line": 120
+        }
+    ],
+    "paragraphs": [
+        {
+            "text": "MAIN.",
+            "start_line": 204
+        },
+        {
+            "text": "GOBACK.",
+            "start_line": 239
+        },
+        {
+            "text": "OPEN-FILES.",
+            "start_line": 241
+        },
+        {
+            "text": "END-IF.",
+            "start_line": 277
+        },
+        {
+            "text": "READ-POLICY.",
+            "start_line": 279
+        },
+        {
+            "text": "READ-PREMIUM.",
+            "start_line": 323
+        },
+        {
+            "text": "PROCESS-PREMIUM.",
+            "start_line": 369
+        },
+        {
+            "text": "FIND-POLICY.",
+            "start_line": 389
+        },
+        {
+            "text": "END-PERFORM.",
+            "start_line": 409
+        },
+        {
+            "text": "VALIDATE-DATES.",
+            "start_line": 411
+        },
+        {
+            "text": "VALIDATE-CALENDAR-DATE.",
+            "start_line": 479
+        },
+        {
+            "text": "SET-MAX-DAY.",
+            "start_line": 507
+        },
+        {
+            "text": "END-EVALUATE.",
+            "start_line": 533
+        },
+        {
+            "text": "CHECK-LEAP-YEAR.",
+            "start_line": 535
+        },
+        {
+            "text": "CALCULATE-EARNED.",
+            "start_line": 559
+        },
+        {
+            "text": "WRITE-RESULT.",
+            "start_line": 637
+        },
+        {
+            "text": "WRITE-ERROR.",
+            "start_line": 667
+        },
+        {
+            "text": "CLOSE-FILES.",
+            "start_line": 687
+        }
+    ],
+    "files": [
+        {
+            "type": "SELECT",
+            "name": "POLICY-IN",
+            "start_line": 35,
+            "assign_to": "POLIN"
+        },
+        {
+            "type": "SELECT",
+            "name": "PREMIUM-IN",
+            "start_line": 39,
+            "assign_to": "PREMIN"
+        },
+        {
+            "type": "SELECT",
+            "name": "PREMIUM-OUT",
+            "start_line": 43,
+            "assign_to": "PREMOUT"
+        },
+        {
+            "type": "SELECT",
+            "name": "ERROR-OUT",
+            "start_line": 47,
+            "assign_to": "ERROUT"
+        }
+    ],
+    "variables": [
+        {
+            "name": "PI-REC",
+            "level": 1,
+            "start_line": 56
+        },
+        {
+            "name": "PI-POLICY-NO",
+            "level": 5,
+            "start_line": 58,
+            "picture": "X(12)."
+        },
+        {
+            "name": "PI-CUSTOMER-ID",
+            "level": 5,
+            "start_line": 60,
+            "picture": "X(9)."
+        },
+        {
+            "name": "PI-AGENT-ID",
+            "level": 5,
+            "start_line": 62,
+            "picture": "X(9)."
+        },
+        {
+            "name": "PI-PRODUCT-TYPE",
+            "level": 5,
+            "start_line": 64,
+            "picture": "X(2)."
+        },
+        {
+            "name": "PI-POLICY-STATUS",
+            "level": 5,
+            "start_line": 66,
+            "picture": "X(2)."
+        },
+        {
+            "name": "PI-EFFECTIVE-DATE",
+            "level": 5,
+            "start_line": 68,
+            "picture": "9(8)."
+        },
+        {
+            "name": "PI-EXPIRY-DATE",
+            "level": 5,
+            "start_line": 70,
+            "picture": "9(8)."
+        },
+        {
+            "name": "PI-WRITTEN-PREMIUM",
+            "level": 5,
+            "start_line": 72,
+            "picture": "9(9)V99."
+        },
+        {
+            "name": "PI-CREATE-DT",
+            "level": 5,
+            "start_line": 74,
+            "picture": "9(8)."
+        },
+        {
+            "name": "PI-UPDATE-DT",
+            "level": 5,
+            "start_line": 76,
+            "picture": "9(8)."
+        },
+        {
+            "name": "PRI-REC",
+            "level": 1,
+            "start_line": 80
+        },
+        {
+            "name": "PRI-PREMIUM-ID",
+            "level": 5,
+            "start_line": 82,
+            "picture": "X(12)."
+        },
+        {
+            "name": "PRI-POLICY-NO",
+            "level": 5,
+            "start_line": 84,
+            "picture": "X(12)."
+        },
+        {
+            "name": "PRI-WRITTEN-PREMIUM",
+            "level": 5,
+            "start_line": 86,
+            "picture": "9(9)V99."
+        },
+        {
+            "name": "PRI-EARNED-PREMIUM",
+            "level": 5,
+            "start_line": 88,
+            "picture": "9(9)V99."
+        },
+        {
+            "name": "PRI-UNEARNED-PREMIUM",
+            "level": 5,
+            "start_line": 90,
+            "picture": "9(9)V99."
+        },
+        {
+            "name": "PRI-CALCULATION-DATE",
+            "level": 5,
+            "start_line": 92,
+            "picture": "9(8)."
+        },
+        {
+            "name": "PRO-REC",
+            "level": 1,
+            "start_line": 96
+        },
+        {
+            "name": "PRO-PREMIUM-ID",
+            "level": 5,
+            "start_line": 98,
+            "picture": "X(12)."
+        },
+        {
+            "name": "PRO-POLICY-NO",
+            "level": 5,
+            "start_line": 100,
+            "picture": "X(12)."
+        },
+        {
+            "name": "PRO-WRITTEN-PREMIUM",
+            "level": 5,
+            "start_line": 102,
+            "picture": "9(9)V99."
+        },
+        {
+            "name": "PRO-EARNED-PREMIUM",
+            "level": 5,
+            "start_line": 104,
+            "picture": "9(9)V99."
+        },
+        {
+            "name": "PRO-UNEARNED-PREMIUM",
+            "level": 5,
+            "start_line": 106,
+            "picture": "9(9)V99."
+        },
+        {
+            "name": "PRO-CALCULATION-DATE",
+            "level": 5,
+            "start_line": 108,
+            "picture": "9(8)."
+        },
+        {
+            "name": "ER-REC",
+            "level": 1,
+            "start_line": 112
+        },
+        {
+            "name": "ER-POLICY-NO",
+            "level": 5,
+            "start_line": 114,
+            "picture": "X(12)."
+        },
+        {
+            "name": "ER-CODE",
+            "level": 5,
+            "start_line": 116,
+            "picture": "X(4)."
+        },
+        {
+            "name": "ER-MESSAGE",
+            "level": 5,
+            "start_line": 118,
+            "picture": "X(54)."
+        },
+        {
+            "name": "WS-STATUS",
+            "level": 1,
+            "start_line": 122
+        },
+        {
+            "name": "WS-PI-ST",
+            "level": 5,
+            "start_line": 124,
+            "picture": "XX",
+            "value": "SPACES"
+        },
+        {
+            "name": "WS-PR-ST",
+            "level": 5,
+            "start_line": 126,
+            "picture": "XX",
+            "value": "SPACES"
+        },
+        {
+            "name": "WS-PO-ST",
+            "level": 5,
+            "start_line": 128,
+            "picture": "XX",
+            "value": "SPACES"
+        },
+        {
+            "name": "WS-ER-ST",
+            "level": 5,
+            "start_line": 130,
+            "picture": "XX",
+            "value": "SPACES"
+        },
+        {
+            "name": "WS-SW",
+            "level": 1,
+            "start_line": 132
+        },
+        {
+            "name": "WS-POL-EOF",
+            "level": 5,
+            "start_line": 134,
+            "picture": "X",
+            "value": "'N'"
+        },
+        {
+            "name": "WS-PREM-EOF",
+            "level": 5,
+            "start_line": 138,
+            "picture": "X",
+            "value": "'N'"
+        },
+        {
+            "name": "WS-POL-FOUND",
+            "level": 5,
+            "start_line": 142,
+            "picture": "X",
+            "value": "'N'"
+        },
+        {
+            "name": "WS-FATAL",
+            "level": 5,
+            "start_line": 144,
+            "picture": "X",
+            "value": "'N'"
+        },
+        {
+            "name": "WS-DATE-VALID",
+            "level": 5,
+            "start_line": 148,
+            "picture": "X",
+            "value": "'N'"
+        },
+        {
+            "name": "WS-SEQUENCE",
+            "level": 1,
+            "start_line": 150
+        },
+        {
+            "name": "WS-PREV-POLICY",
+            "level": 5,
+            "start_line": 152,
+            "picture": "X(12)",
+            "value": "LOW-VALUES"
+        },
+        {
+            "name": "WS-PREV-PREMIUM-POLICY",
+            "level": 5,
+            "start_line": 154,
+            "picture": "X(12)",
+            "value": "LOW-VALUES"
+        },
+        {
+            "name": "WS-DATE-WORK",
+            "level": 1,
+            "start_line": 156
+        },
+        {
+            "name": "WS-DATE-IN",
+            "level": 5,
+            "start_line": 158,
+            "picture": "9(8)."
+        },
+        {
+            "name": "WS-YEAR",
+            "level": 5,
+            "start_line": 160,
+            "picture": "9(4)."
+        },
+        {
+            "name": "WS-MONTH",
+            "level": 5,
+            "start_line": 162,
+            "picture": "99."
+        },
+        {
+            "name": "WS-DAY",
+            "level": 5,
+            "start_line": 164,
+            "picture": "99."
+        },
+        {
+            "name": "WS-MAX-DAY",
+            "level": 5,
+            "start_line": 166,
+            "picture": "99."
+        },
+        {
+            "name": "WS-LEAP",
+            "level": 5,
+            "start_line": 168,
+            "picture": "X."
+        },
+        {
+            "name": "WS-REM4",
+            "level": 5,
+            "start_line": 170,
+            "picture": "9(4)."
+        },
+        {
+            "name": "WS-REM100",
+            "level": 5,
+            "start_line": 172,
+            "picture": "9(4)."
+        },
+        {
+            "name": "WS-REM400",
+            "level": 5,
+            "start_line": 174,
+            "picture": "9(4)."
+        },
+        {
+            "name": "WS-EFF-INT",
+            "level": 5,
+            "start_line": 176,
+            "picture": "9(9)."
+        },
+        {
+            "name": "WS-EXP-INT",
+            "level": 5,
+            "start_line": 178,
+            "picture": "9(9)."
+        },
+        {
+            "name": "WS-CALC-INT",
+            "level": 5,
+            "start_line": 180,
+            "picture": "9(9)."
+        },
+        {
+            "name": "WS-TERM-DAYS",
+            "level": 5,
+            "start_line": 182,
+            "picture": "9(9)."
+        },
+        {
+            "name": "WS-EARNED-DAYS",
+            "level": 5,
+            "start_line": 184,
+            "picture": "9(9)."
+        },
+        {
+            "name": "WS-AMOUNTS",
+            "level": 1,
+            "start_line": 186
+        },
+        {
+            "name": "WS-EARNED",
+            "level": 5,
+            "start_line": 188,
+            "picture": "9(9)V99."
+        },
+        {
+            "name": "WS-UNEARNED",
+            "level": 5,
+            "start_line": 190,
+            "picture": "9(9)V99."
+        },
+        {
+            "name": "WS-COUNTERS",
+            "level": 1,
+            "start_line": 192
+        },
+        {
+            "name": "WS-READ",
+            "level": 5,
+            "start_line": 194,
+            "picture": "9(9)",
+            "value": "ZERO"
+        },
+        {
+            "name": "WS-CALCULATED",
+            "level": 5,
+            "start_line": 196,
+            "picture": "9(9)",
+            "value": "ZERO"
+        },
+        {
+            "name": "WS-ERRORS",
+            "level": 5,
+            "start_line": 198,
+            "picture": "9(9)",
+            "value": "ZERO"
+        },
+        {
+            "name": "WS-IO-ERRORS",
+            "level": 5,
+            "start_line": 200,
+            "picture": "9(9)",
+            "value": "ZERO"
+        },
+        {
+            "name": "POL-EOF",
+            "level": 88,
+            "value": "'Y'",
+            "start_line": 136
+        },
+        {
+            "name": "PREM-EOF",
+            "level": 88,
+            "value": "'Y'",
+            "start_line": 140
+        },
+        {
+            "name": "FATAL-ERROR",
+            "level": 88,
+            "value": "'Y'",
+            "start_line": 146
+        }
+    ],
+    "records": [
+        {
+            "record_name": "PI-REC",
+            "level": 1,
+            "start_line": 56,
+            "fields": [
+                {
+                    "name": "PI-POLICY-NO",
+                    "level": 5,
+                    "start_line": 58,
+                    "picture": "X(12)."
+                },
+                {
+                    "name": "PI-CUSTOMER-ID",
+                    "level": 5,
+                    "start_line": 60,
+                    "picture": "X(9)."
+                },
+                {
+                    "name": "PI-AGENT-ID",
+                    "level": 5,
+                    "start_line": 62,
+                    "picture": "X(9)."
+                },
+                {
+                    "name": "PI-PRODUCT-TYPE",
+                    "level": 5,
+                    "start_line": 64,
+                    "picture": "X(2)."
+                },
+                {
+                    "name": "PI-POLICY-STATUS",
+                    "level": 5,
+                    "start_line": 66,
+                    "picture": "X(2)."
+                },
+                {
+                    "name": "PI-EFFECTIVE-DATE",
+                    "level": 5,
+                    "start_line": 68,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "PI-EXPIRY-DATE",
+                    "level": 5,
+                    "start_line": 70,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "PI-WRITTEN-PREMIUM",
+                    "level": 5,
+                    "start_line": 72,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PI-CREATE-DT",
+                    "level": 5,
+                    "start_line": 74,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "PI-UPDATE-DT",
+                    "level": 5,
+                    "start_line": 76,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "PRI-PREMIUM-ID",
+                    "level": 5,
+                    "start_line": 82,
+                    "picture": "X(12)."
+                },
+                {
+                    "name": "PRI-POLICY-NO",
+                    "level": 5,
+                    "start_line": 84,
+                    "picture": "X(12)."
+                },
+                {
+                    "name": "PRI-WRITTEN-PREMIUM",
+                    "level": 5,
+                    "start_line": 86,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PRI-EARNED-PREMIUM",
+                    "level": 5,
+                    "start_line": 88,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PRI-UNEARNED-PREMIUM",
+                    "level": 5,
+                    "start_line": 90,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PRI-CALCULATION-DATE",
+                    "level": 5,
+                    "start_line": 92,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "PRO-PREMIUM-ID",
+                    "level": 5,
+                    "start_line": 98,
+                    "picture": "X(12)."
+                },
+                {
+                    "name": "PRO-POLICY-NO",
+                    "level": 5,
+                    "start_line": 100,
+                    "picture": "X(12)."
+                },
+                {
+                    "name": "PRO-WRITTEN-PREMIUM",
+                    "level": 5,
+                    "start_line": 102,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PRO-EARNED-PREMIUM",
+                    "level": 5,
+                    "start_line": 104,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PRO-UNEARNED-PREMIUM",
+                    "level": 5,
+                    "start_line": 106,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PRO-CALCULATION-DATE",
+                    "level": 5,
+                    "start_line": 108,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "ER-POLICY-NO",
+                    "level": 5,
+                    "start_line": 114,
+                    "picture": "X(12)."
+                },
+                {
+                    "name": "ER-CODE",
+                    "level": 5,
+                    "start_line": 116,
+                    "picture": "X(4)."
+                },
+                {
+                    "name": "ER-MESSAGE",
+                    "level": 5,
+                    "start_line": 118,
+                    "picture": "X(54)."
+                },
+                {
+                    "name": "WS-PI-ST",
+                    "level": 5,
+                    "start_line": 124,
+                    "picture": "XX",
+                    "value": "SPACES"
+                },
+                {
+                    "name": "WS-PR-ST",
+                    "level": 5,
+                    "start_line": 126,
+                    "picture": "XX",
+                    "value": "SPACES"
+                },
+                {
+                    "name": "WS-PO-ST",
+                    "level": 5,
+                    "start_line": 128,
+                    "picture": "XX",
+                    "value": "SPACES"
+                },
+                {
+                    "name": "WS-ER-ST",
+                    "level": 5,
+                    "start_line": 130,
+                    "picture": "XX",
+                    "value": "SPACES"
+                },
+                {
+                    "name": "WS-POL-EOF",
+                    "level": 5,
+                    "start_line": 134,
+                    "picture": "X",
+                    "value": "'N'"
+                },
+                {
+                    "name": "WS-PREM-EOF",
+                    "level": 5,
+                    "start_line": 138,
+                    "picture": "X",
+                    "value": "'N'"
+                },
+                {
+                    "name": "WS-POL-FOUND",
+                    "level": 5,
+                    "start_line": 142,
+                    "picture": "X",
+                    "value": "'N'"
+                },
+                {
+                    "name": "WS-FATAL",
+                    "level": 5,
+                    "start_line": 144,
+                    "picture": "X",
+                    "value": "'N'"
+                },
+                {
+                    "name": "WS-DATE-VALID",
+                    "level": 5,
+                    "start_line": 148,
+                    "picture": "X",
+                    "value": "'N'"
+                },
+                {
+                    "name": "WS-PREV-POLICY",
+                    "level": 5,
+                    "start_line": 152,
+                    "picture": "X(12)",
+                    "value": "LOW-VALUES"
+                },
+                {
+                    "name": "WS-PREV-PREMIUM-POLICY",
+                    "level": 5,
+                    "start_line": 154,
+                    "picture": "X(12)",
+                    "value": "LOW-VALUES"
+                },
+                {
+                    "name": "WS-DATE-IN",
+                    "level": 5,
+                    "start_line": 158,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "WS-YEAR",
+                    "level": 5,
+                    "start_line": 160,
+                    "picture": "9(4)."
+                },
+                {
+                    "name": "WS-MONTH",
+                    "level": 5,
+                    "start_line": 162,
+                    "picture": "99."
+                },
+                {
+                    "name": "WS-DAY",
+                    "level": 5,
+                    "start_line": 164,
+                    "picture": "99."
+                },
+                {
+                    "name": "WS-MAX-DAY",
+                    "level": 5,
+                    "start_line": 166,
+                    "picture": "99."
+                },
+                {
+                    "name": "WS-LEAP",
+                    "level": 5,
+                    "start_line": 168,
+                    "picture": "X."
+                },
+                {
+                    "name": "WS-REM4",
+                    "level": 5,
+                    "start_line": 170,
+                    "picture": "9(4)."
+                },
+                {
+                    "name": "WS-REM100",
+                    "level": 5,
+                    "start_line": 172,
+                    "picture": "9(4)."
+                },
+                {
+                    "name": "WS-REM400",
+                    "level": 5,
+                    "start_line": 174,
+                    "picture": "9(4)."
+                },
+                {
+                    "name": "WS-EFF-INT",
+                    "level": 5,
+                    "start_line": 176,
+                    "picture": "9(9)."
+                },
+                {
+                    "name": "WS-EXP-INT",
+                    "level": 5,
+                    "start_line": 178,
+                    "picture": "9(9)."
+                },
+                {
+                    "name": "WS-CALC-INT",
+                    "level": 5,
+                    "start_line": 180,
+                    "picture": "9(9)."
+                },
+                {
+                    "name": "WS-TERM-DAYS",
+                    "level": 5,
+                    "start_line": 182,
+                    "picture": "9(9)."
+                },
+                {
+                    "name": "WS-EARNED-DAYS",
+                    "level": 5,
+                    "start_line": 184,
+                    "picture": "9(9)."
+                },
+                {
+                    "name": "WS-EARNED",
+                    "level": 5,
+                    "start_line": 188,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "WS-UNEARNED",
+                    "level": 5,
+                    "start_line": 190,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "WS-READ",
+                    "level": 5,
+                    "start_line": 194,
+                    "picture": "9(9)",
+                    "value": "ZERO"
+                },
+                {
+                    "name": "WS-CALCULATED",
+                    "level": 5,
+                    "start_line": 196,
+                    "picture": "9(9)",
+                    "value": "ZERO"
+                },
+                {
+                    "name": "WS-ERRORS",
+                    "level": 5,
+                    "start_line": 198,
+                    "picture": "9(9)",
+                    "value": "ZERO"
+                },
+                {
+                    "name": "WS-IO-ERRORS",
+                    "level": 5,
+                    "start_line": 200,
+                    "picture": "9(9)",
+                    "value": "ZERO"
+                }
+            ]
+        },
+        {
+            "record_name": "PRI-REC",
+            "level": 1,
+            "start_line": 80,
+            "fields": [
+                {
+                    "name": "PI-POLICY-NO",
+                    "level": 5,
+                    "start_line": 58,
+                    "picture": "X(12)."
+                },
+                {
+                    "name": "PI-CUSTOMER-ID",
+                    "level": 5,
+                    "start_line": 60,
+                    "picture": "X(9)."
+                },
+                {
+                    "name": "PI-AGENT-ID",
+                    "level": 5,
+                    "start_line": 62,
+                    "picture": "X(9)."
+                },
+                {
+                    "name": "PI-PRODUCT-TYPE",
+                    "level": 5,
+                    "start_line": 64,
+                    "picture": "X(2)."
+                },
+                {
+                    "name": "PI-POLICY-STATUS",
+                    "level": 5,
+                    "start_line": 66,
+                    "picture": "X(2)."
+                },
+                {
+                    "name": "PI-EFFECTIVE-DATE",
+                    "level": 5,
+                    "start_line": 68,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "PI-EXPIRY-DATE",
+                    "level": 5,
+                    "start_line": 70,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "PI-WRITTEN-PREMIUM",
+                    "level": 5,
+                    "start_line": 72,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PI-CREATE-DT",
+                    "level": 5,
+                    "start_line": 74,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "PI-UPDATE-DT",
+                    "level": 5,
+                    "start_line": 76,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "PRI-PREMIUM-ID",
+                    "level": 5,
+                    "start_line": 82,
+                    "picture": "X(12)."
+                },
+                {
+                    "name": "PRI-POLICY-NO",
+                    "level": 5,
+                    "start_line": 84,
+                    "picture": "X(12)."
+                },
+                {
+                    "name": "PRI-WRITTEN-PREMIUM",
+                    "level": 5,
+                    "start_line": 86,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PRI-EARNED-PREMIUM",
+                    "level": 5,
+                    "start_line": 88,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PRI-UNEARNED-PREMIUM",
+                    "level": 5,
+                    "start_line": 90,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PRI-CALCULATION-DATE",
+                    "level": 5,
+                    "start_line": 92,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "PRO-PREMIUM-ID",
+                    "level": 5,
+                    "start_line": 98,
+                    "picture": "X(12)."
+                },
+                {
+                    "name": "PRO-POLICY-NO",
+                    "level": 5,
+                    "start_line": 100,
+                    "picture": "X(12)."
+                },
+                {
+                    "name": "PRO-WRITTEN-PREMIUM",
+                    "level": 5,
+                    "start_line": 102,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PRO-EARNED-PREMIUM",
+                    "level": 5,
+                    "start_line": 104,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PRO-UNEARNED-PREMIUM",
+                    "level": 5,
+                    "start_line": 106,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PRO-CALCULATION-DATE",
+                    "level": 5,
+                    "start_line": 108,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "ER-POLICY-NO",
+                    "level": 5,
+                    "start_line": 114,
+                    "picture": "X(12)."
+                },
+                {
+                    "name": "ER-CODE",
+                    "level": 5,
+                    "start_line": 116,
+                    "picture": "X(4)."
+                },
+                {
+                    "name": "ER-MESSAGE",
+                    "level": 5,
+                    "start_line": 118,
+                    "picture": "X(54)."
+                },
+                {
+                    "name": "WS-PI-ST",
+                    "level": 5,
+                    "start_line": 124,
+                    "picture": "XX",
+                    "value": "SPACES"
+                },
+                {
+                    "name": "WS-PR-ST",
+                    "level": 5,
+                    "start_line": 126,
+                    "picture": "XX",
+                    "value": "SPACES"
+                },
+                {
+                    "name": "WS-PO-ST",
+                    "level": 5,
+                    "start_line": 128,
+                    "picture": "XX",
+                    "value": "SPACES"
+                },
+                {
+                    "name": "WS-ER-ST",
+                    "level": 5,
+                    "start_line": 130,
+                    "picture": "XX",
+                    "value": "SPACES"
+                },
+                {
+                    "name": "WS-POL-EOF",
+                    "level": 5,
+                    "start_line": 134,
+                    "picture": "X",
+                    "value": "'N'"
+                },
+                {
+                    "name": "WS-PREM-EOF",
+                    "level": 5,
+                    "start_line": 138,
+                    "picture": "X",
+                    "value": "'N'"
+                },
+                {
+                    "name": "WS-POL-FOUND",
+                    "level": 5,
+                    "start_line": 142,
+                    "picture": "X",
+                    "value": "'N'"
+                },
+                {
+                    "name": "WS-FATAL",
+                    "level": 5,
+                    "start_line": 144,
+                    "picture": "X",
+                    "value": "'N'"
+                },
+                {
+                    "name": "WS-DATE-VALID",
+                    "level": 5,
+                    "start_line": 148,
+                    "picture": "X",
+                    "value": "'N'"
+                },
+                {
+                    "name": "WS-PREV-POLICY",
+                    "level": 5,
+                    "start_line": 152,
+                    "picture": "X(12)",
+                    "value": "LOW-VALUES"
+                },
+                {
+                    "name": "WS-PREV-PREMIUM-POLICY",
+                    "level": 5,
+                    "start_line": 154,
+                    "picture": "X(12)",
+                    "value": "LOW-VALUES"
+                },
+                {
+                    "name": "WS-DATE-IN",
+                    "level": 5,
+                    "start_line": 158,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "WS-YEAR",
+                    "level": 5,
+                    "start_line": 160,
+                    "picture": "9(4)."
+                },
+                {
+                    "name": "WS-MONTH",
+                    "level": 5,
+                    "start_line": 162,
+                    "picture": "99."
+                },
+                {
+                    "name": "WS-DAY",
+                    "level": 5,
+                    "start_line": 164,
+                    "picture": "99."
+                },
+                {
+                    "name": "WS-MAX-DAY",
+                    "level": 5,
+                    "start_line": 166,
+                    "picture": "99."
+                },
+                {
+                    "name": "WS-LEAP",
+                    "level": 5,
+                    "start_line": 168,
+                    "picture": "X."
+                },
+                {
+                    "name": "WS-REM4",
+                    "level": 5,
+                    "start_line": 170,
+                    "picture": "9(4)."
+                },
+                {
+                    "name": "WS-REM100",
+                    "level": 5,
+                    "start_line": 172,
+                    "picture": "9(4)."
+                },
+                {
+                    "name": "WS-REM400",
+                    "level": 5,
+                    "start_line": 174,
+                    "picture": "9(4)."
+                },
+                {
+                    "name": "WS-EFF-INT",
+                    "level": 5,
+                    "start_line": 176,
+                    "picture": "9(9)."
+                },
+                {
+                    "name": "WS-EXP-INT",
+                    "level": 5,
+                    "start_line": 178,
+                    "picture": "9(9)."
+                },
+                {
+                    "name": "WS-CALC-INT",
+                    "level": 5,
+                    "start_line": 180,
+                    "picture": "9(9)."
+                },
+                {
+                    "name": "WS-TERM-DAYS",
+                    "level": 5,
+                    "start_line": 182,
+                    "picture": "9(9)."
+                },
+                {
+                    "name": "WS-EARNED-DAYS",
+                    "level": 5,
+                    "start_line": 184,
+                    "picture": "9(9)."
+                },
+                {
+                    "name": "WS-EARNED",
+                    "level": 5,
+                    "start_line": 188,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "WS-UNEARNED",
+                    "level": 5,
+                    "start_line": 190,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "WS-READ",
+                    "level": 5,
+                    "start_line": 194,
+                    "picture": "9(9)",
+                    "value": "ZERO"
+                },
+                {
+                    "name": "WS-CALCULATED",
+                    "level": 5,
+                    "start_line": 196,
+                    "picture": "9(9)",
+                    "value": "ZERO"
+                },
+                {
+                    "name": "WS-ERRORS",
+                    "level": 5,
+                    "start_line": 198,
+                    "picture": "9(9)",
+                    "value": "ZERO"
+                },
+                {
+                    "name": "WS-IO-ERRORS",
+                    "level": 5,
+                    "start_line": 200,
+                    "picture": "9(9)",
+                    "value": "ZERO"
+                }
+            ]
+        },
+        {
+            "record_name": "PRO-REC",
+            "level": 1,
+            "start_line": 96,
+            "fields": [
+                {
+                    "name": "PI-POLICY-NO",
+                    "level": 5,
+                    "start_line": 58,
+                    "picture": "X(12)."
+                },
+                {
+                    "name": "PI-CUSTOMER-ID",
+                    "level": 5,
+                    "start_line": 60,
+                    "picture": "X(9)."
+                },
+                {
+                    "name": "PI-AGENT-ID",
+                    "level": 5,
+                    "start_line": 62,
+                    "picture": "X(9)."
+                },
+                {
+                    "name": "PI-PRODUCT-TYPE",
+                    "level": 5,
+                    "start_line": 64,
+                    "picture": "X(2)."
+                },
+                {
+                    "name": "PI-POLICY-STATUS",
+                    "level": 5,
+                    "start_line": 66,
+                    "picture": "X(2)."
+                },
+                {
+                    "name": "PI-EFFECTIVE-DATE",
+                    "level": 5,
+                    "start_line": 68,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "PI-EXPIRY-DATE",
+                    "level": 5,
+                    "start_line": 70,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "PI-WRITTEN-PREMIUM",
+                    "level": 5,
+                    "start_line": 72,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PI-CREATE-DT",
+                    "level": 5,
+                    "start_line": 74,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "PI-UPDATE-DT",
+                    "level": 5,
+                    "start_line": 76,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "PRI-PREMIUM-ID",
+                    "level": 5,
+                    "start_line": 82,
+                    "picture": "X(12)."
+                },
+                {
+                    "name": "PRI-POLICY-NO",
+                    "level": 5,
+                    "start_line": 84,
+                    "picture": "X(12)."
+                },
+                {
+                    "name": "PRI-WRITTEN-PREMIUM",
+                    "level": 5,
+                    "start_line": 86,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PRI-EARNED-PREMIUM",
+                    "level": 5,
+                    "start_line": 88,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PRI-UNEARNED-PREMIUM",
+                    "level": 5,
+                    "start_line": 90,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PRI-CALCULATION-DATE",
+                    "level": 5,
+                    "start_line": 92,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "PRO-PREMIUM-ID",
+                    "level": 5,
+                    "start_line": 98,
+                    "picture": "X(12)."
+                },
+                {
+                    "name": "PRO-POLICY-NO",
+                    "level": 5,
+                    "start_line": 100,
+                    "picture": "X(12)."
+                },
+                {
+                    "name": "PRO-WRITTEN-PREMIUM",
+                    "level": 5,
+                    "start_line": 102,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PRO-EARNED-PREMIUM",
+                    "level": 5,
+                    "start_line": 104,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PRO-UNEARNED-PREMIUM",
+                    "level": 5,
+                    "start_line": 106,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PRO-CALCULATION-DATE",
+                    "level": 5,
+                    "start_line": 108,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "ER-POLICY-NO",
+                    "level": 5,
+                    "start_line": 114,
+                    "picture": "X(12)."
+                },
+                {
+                    "name": "ER-CODE",
+                    "level": 5,
+                    "start_line": 116,
+                    "picture": "X(4)."
+                },
+                {
+                    "name": "ER-MESSAGE",
+                    "level": 5,
+                    "start_line": 118,
+                    "picture": "X(54)."
+                },
+                {
+                    "name": "WS-PI-ST",
+                    "level": 5,
+                    "start_line": 124,
+                    "picture": "XX",
+                    "value": "SPACES"
+                },
+                {
+                    "name": "WS-PR-ST",
+                    "level": 5,
+                    "start_line": 126,
+                    "picture": "XX",
+                    "value": "SPACES"
+                },
+                {
+                    "name": "WS-PO-ST",
+                    "level": 5,
+                    "start_line": 128,
+                    "picture": "XX",
+                    "value": "SPACES"
+                },
+                {
+                    "name": "WS-ER-ST",
+                    "level": 5,
+                    "start_line": 130,
+                    "picture": "XX",
+                    "value": "SPACES"
+                },
+                {
+                    "name": "WS-POL-EOF",
+                    "level": 5,
+                    "start_line": 134,
+                    "picture": "X",
+                    "value": "'N'"
+                },
+                {
+                    "name": "WS-PREM-EOF",
+                    "level": 5,
+                    "start_line": 138,
+                    "picture": "X",
+                    "value": "'N'"
+                },
+                {
+                    "name": "WS-POL-FOUND",
+                    "level": 5,
+                    "start_line": 142,
+                    "picture": "X",
+                    "value": "'N'"
+                },
+                {
+                    "name": "WS-FATAL",
+                    "level": 5,
+                    "start_line": 144,
+                    "picture": "X",
+                    "value": "'N'"
+                },
+                {
+                    "name": "WS-DATE-VALID",
+                    "level": 5,
+                    "start_line": 148,
+                    "picture": "X",
+                    "value": "'N'"
+                },
+                {
+                    "name": "WS-PREV-POLICY",
+                    "level": 5,
+                    "start_line": 152,
+                    "picture": "X(12)",
+                    "value": "LOW-VALUES"
+                },
+                {
+                    "name": "WS-PREV-PREMIUM-POLICY",
+                    "level": 5,
+                    "start_line": 154,
+                    "picture": "X(12)",
+                    "value": "LOW-VALUES"
+                },
+                {
+                    "name": "WS-DATE-IN",
+                    "level": 5,
+                    "start_line": 158,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "WS-YEAR",
+                    "level": 5,
+                    "start_line": 160,
+                    "picture": "9(4)."
+                },
+                {
+                    "name": "WS-MONTH",
+                    "level": 5,
+                    "start_line": 162,
+                    "picture": "99."
+                },
+                {
+                    "name": "WS-DAY",
+                    "level": 5,
+                    "start_line": 164,
+                    "picture": "99."
+                },
+                {
+                    "name": "WS-MAX-DAY",
+                    "level": 5,
+                    "start_line": 166,
+                    "picture": "99."
+                },
+                {
+                    "name": "WS-LEAP",
+                    "level": 5,
+                    "start_line": 168,
+                    "picture": "X."
+                },
+                {
+                    "name": "WS-REM4",
+                    "level": 5,
+                    "start_line": 170,
+                    "picture": "9(4)."
+                },
+                {
+                    "name": "WS-REM100",
+                    "level": 5,
+                    "start_line": 172,
+                    "picture": "9(4)."
+                },
+                {
+                    "name": "WS-REM400",
+                    "level": 5,
+                    "start_line": 174,
+                    "picture": "9(4)."
+                },
+                {
+                    "name": "WS-EFF-INT",
+                    "level": 5,
+                    "start_line": 176,
+                    "picture": "9(9)."
+                },
+                {
+                    "name": "WS-EXP-INT",
+                    "level": 5,
+                    "start_line": 178,
+                    "picture": "9(9)."
+                },
+                {
+                    "name": "WS-CALC-INT",
+                    "level": 5,
+                    "start_line": 180,
+                    "picture": "9(9)."
+                },
+                {
+                    "name": "WS-TERM-DAYS",
+                    "level": 5,
+                    "start_line": 182,
+                    "picture": "9(9)."
+                },
+                {
+                    "name": "WS-EARNED-DAYS",
+                    "level": 5,
+                    "start_line": 184,
+                    "picture": "9(9)."
+                },
+                {
+                    "name": "WS-EARNED",
+                    "level": 5,
+                    "start_line": 188,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "WS-UNEARNED",
+                    "level": 5,
+                    "start_line": 190,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "WS-READ",
+                    "level": 5,
+                    "start_line": 194,
+                    "picture": "9(9)",
+                    "value": "ZERO"
+                },
+                {
+                    "name": "WS-CALCULATED",
+                    "level": 5,
+                    "start_line": 196,
+                    "picture": "9(9)",
+                    "value": "ZERO"
+                },
+                {
+                    "name": "WS-ERRORS",
+                    "level": 5,
+                    "start_line": 198,
+                    "picture": "9(9)",
+                    "value": "ZERO"
+                },
+                {
+                    "name": "WS-IO-ERRORS",
+                    "level": 5,
+                    "start_line": 200,
+                    "picture": "9(9)",
+                    "value": "ZERO"
+                }
+            ]
+        },
+        {
+            "record_name": "ER-REC",
+            "level": 1,
+            "start_line": 112,
+            "fields": [
+                {
+                    "name": "PI-POLICY-NO",
+                    "level": 5,
+                    "start_line": 58,
+                    "picture": "X(12)."
+                },
+                {
+                    "name": "PI-CUSTOMER-ID",
+                    "level": 5,
+                    "start_line": 60,
+                    "picture": "X(9)."
+                },
+                {
+                    "name": "PI-AGENT-ID",
+                    "level": 5,
+                    "start_line": 62,
+                    "picture": "X(9)."
+                },
+                {
+                    "name": "PI-PRODUCT-TYPE",
+                    "level": 5,
+                    "start_line": 64,
+                    "picture": "X(2)."
+                },
+                {
+                    "name": "PI-POLICY-STATUS",
+                    "level": 5,
+                    "start_line": 66,
+                    "picture": "X(2)."
+                },
+                {
+                    "name": "PI-EFFECTIVE-DATE",
+                    "level": 5,
+                    "start_line": 68,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "PI-EXPIRY-DATE",
+                    "level": 5,
+                    "start_line": 70,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "PI-WRITTEN-PREMIUM",
+                    "level": 5,
+                    "start_line": 72,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PI-CREATE-DT",
+                    "level": 5,
+                    "start_line": 74,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "PI-UPDATE-DT",
+                    "level": 5,
+                    "start_line": 76,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "PRI-PREMIUM-ID",
+                    "level": 5,
+                    "start_line": 82,
+                    "picture": "X(12)."
+                },
+                {
+                    "name": "PRI-POLICY-NO",
+                    "level": 5,
+                    "start_line": 84,
+                    "picture": "X(12)."
+                },
+                {
+                    "name": "PRI-WRITTEN-PREMIUM",
+                    "level": 5,
+                    "start_line": 86,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PRI-EARNED-PREMIUM",
+                    "level": 5,
+                    "start_line": 88,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PRI-UNEARNED-PREMIUM",
+                    "level": 5,
+                    "start_line": 90,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PRI-CALCULATION-DATE",
+                    "level": 5,
+                    "start_line": 92,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "PRO-PREMIUM-ID",
+                    "level": 5,
+                    "start_line": 98,
+                    "picture": "X(12)."
+                },
+                {
+                    "name": "PRO-POLICY-NO",
+                    "level": 5,
+                    "start_line": 100,
+                    "picture": "X(12)."
+                },
+                {
+                    "name": "PRO-WRITTEN-PREMIUM",
+                    "level": 5,
+                    "start_line": 102,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PRO-EARNED-PREMIUM",
+                    "level": 5,
+                    "start_line": 104,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PRO-UNEARNED-PREMIUM",
+                    "level": 5,
+                    "start_line": 106,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PRO-CALCULATION-DATE",
+                    "level": 5,
+                    "start_line": 108,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "ER-POLICY-NO",
+                    "level": 5,
+                    "start_line": 114,
+                    "picture": "X(12)."
+                },
+                {
+                    "name": "ER-CODE",
+                    "level": 5,
+                    "start_line": 116,
+                    "picture": "X(4)."
+                },
+                {
+                    "name": "ER-MESSAGE",
+                    "level": 5,
+                    "start_line": 118,
+                    "picture": "X(54)."
+                },
+                {
+                    "name": "WS-PI-ST",
+                    "level": 5,
+                    "start_line": 124,
+                    "picture": "XX",
+                    "value": "SPACES"
+                },
+                {
+                    "name": "WS-PR-ST",
+                    "level": 5,
+                    "start_line": 126,
+                    "picture": "XX",
+                    "value": "SPACES"
+                },
+                {
+                    "name": "WS-PO-ST",
+                    "level": 5,
+                    "start_line": 128,
+                    "picture": "XX",
+                    "value": "SPACES"
+                },
+                {
+                    "name": "WS-ER-ST",
+                    "level": 5,
+                    "start_line": 130,
+                    "picture": "XX",
+                    "value": "SPACES"
+                },
+                {
+                    "name": "WS-POL-EOF",
+                    "level": 5,
+                    "start_line": 134,
+                    "picture": "X",
+                    "value": "'N'"
+                },
+                {
+                    "name": "WS-PREM-EOF",
+                    "level": 5,
+                    "start_line": 138,
+                    "picture": "X",
+                    "value": "'N'"
+                },
+                {
+                    "name": "WS-POL-FOUND",
+                    "level": 5,
+                    "start_line": 142,
+                    "picture": "X",
+                    "value": "'N'"
+                },
+                {
+                    "name": "WS-FATAL",
+                    "level": 5,
+                    "start_line": 144,
+                    "picture": "X",
+                    "value": "'N'"
+                },
+                {
+                    "name": "WS-DATE-VALID",
+                    "level": 5,
+                    "start_line": 148,
+                    "picture": "X",
+                    "value": "'N'"
+                },
+                {
+                    "name": "WS-PREV-POLICY",
+                    "level": 5,
+                    "start_line": 152,
+                    "picture": "X(12)",
+                    "value": "LOW-VALUES"
+                },
+                {
+                    "name": "WS-PREV-PREMIUM-POLICY",
+                    "level": 5,
+                    "start_line": 154,
+                    "picture": "X(12)",
+                    "value": "LOW-VALUES"
+                },
+                {
+                    "name": "WS-DATE-IN",
+                    "level": 5,
+                    "start_line": 158,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "WS-YEAR",
+                    "level": 5,
+                    "start_line": 160,
+                    "picture": "9(4)."
+                },
+                {
+                    "name": "WS-MONTH",
+                    "level": 5,
+                    "start_line": 162,
+                    "picture": "99."
+                },
+                {
+                    "name": "WS-DAY",
+                    "level": 5,
+                    "start_line": 164,
+                    "picture": "99."
+                },
+                {
+                    "name": "WS-MAX-DAY",
+                    "level": 5,
+                    "start_line": 166,
+                    "picture": "99."
+                },
+                {
+                    "name": "WS-LEAP",
+                    "level": 5,
+                    "start_line": 168,
+                    "picture": "X."
+                },
+                {
+                    "name": "WS-REM4",
+                    "level": 5,
+                    "start_line": 170,
+                    "picture": "9(4)."
+                },
+                {
+                    "name": "WS-REM100",
+                    "level": 5,
+                    "start_line": 172,
+                    "picture": "9(4)."
+                },
+                {
+                    "name": "WS-REM400",
+                    "level": 5,
+                    "start_line": 174,
+                    "picture": "9(4)."
+                },
+                {
+                    "name": "WS-EFF-INT",
+                    "level": 5,
+                    "start_line": 176,
+                    "picture": "9(9)."
+                },
+                {
+                    "name": "WS-EXP-INT",
+                    "level": 5,
+                    "start_line": 178,
+                    "picture": "9(9)."
+                },
+                {
+                    "name": "WS-CALC-INT",
+                    "level": 5,
+                    "start_line": 180,
+                    "picture": "9(9)."
+                },
+                {
+                    "name": "WS-TERM-DAYS",
+                    "level": 5,
+                    "start_line": 182,
+                    "picture": "9(9)."
+                },
+                {
+                    "name": "WS-EARNED-DAYS",
+                    "level": 5,
+                    "start_line": 184,
+                    "picture": "9(9)."
+                },
+                {
+                    "name": "WS-EARNED",
+                    "level": 5,
+                    "start_line": 188,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "WS-UNEARNED",
+                    "level": 5,
+                    "start_line": 190,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "WS-READ",
+                    "level": 5,
+                    "start_line": 194,
+                    "picture": "9(9)",
+                    "value": "ZERO"
+                },
+                {
+                    "name": "WS-CALCULATED",
+                    "level": 5,
+                    "start_line": 196,
+                    "picture": "9(9)",
+                    "value": "ZERO"
+                },
+                {
+                    "name": "WS-ERRORS",
+                    "level": 5,
+                    "start_line": 198,
+                    "picture": "9(9)",
+                    "value": "ZERO"
+                },
+                {
+                    "name": "WS-IO-ERRORS",
+                    "level": 5,
+                    "start_line": 200,
+                    "picture": "9(9)",
+                    "value": "ZERO"
+                }
+            ]
+        },
+        {
+            "record_name": "WS-STATUS",
+            "level": 1,
+            "start_line": 122,
+            "fields": [
+                {
+                    "name": "PI-POLICY-NO",
+                    "level": 5,
+                    "start_line": 58,
+                    "picture": "X(12)."
+                },
+                {
+                    "name": "PI-CUSTOMER-ID",
+                    "level": 5,
+                    "start_line": 60,
+                    "picture": "X(9)."
+                },
+                {
+                    "name": "PI-AGENT-ID",
+                    "level": 5,
+                    "start_line": 62,
+                    "picture": "X(9)."
+                },
+                {
+                    "name": "PI-PRODUCT-TYPE",
+                    "level": 5,
+                    "start_line": 64,
+                    "picture": "X(2)."
+                },
+                {
+                    "name": "PI-POLICY-STATUS",
+                    "level": 5,
+                    "start_line": 66,
+                    "picture": "X(2)."
+                },
+                {
+                    "name": "PI-EFFECTIVE-DATE",
+                    "level": 5,
+                    "start_line": 68,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "PI-EXPIRY-DATE",
+                    "level": 5,
+                    "start_line": 70,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "PI-WRITTEN-PREMIUM",
+                    "level": 5,
+                    "start_line": 72,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PI-CREATE-DT",
+                    "level": 5,
+                    "start_line": 74,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "PI-UPDATE-DT",
+                    "level": 5,
+                    "start_line": 76,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "PRI-PREMIUM-ID",
+                    "level": 5,
+                    "start_line": 82,
+                    "picture": "X(12)."
+                },
+                {
+                    "name": "PRI-POLICY-NO",
+                    "level": 5,
+                    "start_line": 84,
+                    "picture": "X(12)."
+                },
+                {
+                    "name": "PRI-WRITTEN-PREMIUM",
+                    "level": 5,
+                    "start_line": 86,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PRI-EARNED-PREMIUM",
+                    "level": 5,
+                    "start_line": 88,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PRI-UNEARNED-PREMIUM",
+                    "level": 5,
+                    "start_line": 90,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PRI-CALCULATION-DATE",
+                    "level": 5,
+                    "start_line": 92,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "PRO-PREMIUM-ID",
+                    "level": 5,
+                    "start_line": 98,
+                    "picture": "X(12)."
+                },
+                {
+                    "name": "PRO-POLICY-NO",
+                    "level": 5,
+                    "start_line": 100,
+                    "picture": "X(12)."
+                },
+                {
+                    "name": "PRO-WRITTEN-PREMIUM",
+                    "level": 5,
+                    "start_line": 102,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PRO-EARNED-PREMIUM",
+                    "level": 5,
+                    "start_line": 104,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PRO-UNEARNED-PREMIUM",
+                    "level": 5,
+                    "start_line": 106,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PRO-CALCULATION-DATE",
+                    "level": 5,
+                    "start_line": 108,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "ER-POLICY-NO",
+                    "level": 5,
+                    "start_line": 114,
+                    "picture": "X(12)."
+                },
+                {
+                    "name": "ER-CODE",
+                    "level": 5,
+                    "start_line": 116,
+                    "picture": "X(4)."
+                },
+                {
+                    "name": "ER-MESSAGE",
+                    "level": 5,
+                    "start_line": 118,
+                    "picture": "X(54)."
+                },
+                {
+                    "name": "WS-PI-ST",
+                    "level": 5,
+                    "start_line": 124,
+                    "picture": "XX",
+                    "value": "SPACES"
+                },
+                {
+                    "name": "WS-PR-ST",
+                    "level": 5,
+                    "start_line": 126,
+                    "picture": "XX",
+                    "value": "SPACES"
+                },
+                {
+                    "name": "WS-PO-ST",
+                    "level": 5,
+                    "start_line": 128,
+                    "picture": "XX",
+                    "value": "SPACES"
+                },
+                {
+                    "name": "WS-ER-ST",
+                    "level": 5,
+                    "start_line": 130,
+                    "picture": "XX",
+                    "value": "SPACES"
+                },
+                {
+                    "name": "WS-POL-EOF",
+                    "level": 5,
+                    "start_line": 134,
+                    "picture": "X",
+                    "value": "'N'"
+                },
+                {
+                    "name": "WS-PREM-EOF",
+                    "level": 5,
+                    "start_line": 138,
+                    "picture": "X",
+                    "value": "'N'"
+                },
+                {
+                    "name": "WS-POL-FOUND",
+                    "level": 5,
+                    "start_line": 142,
+                    "picture": "X",
+                    "value": "'N'"
+                },
+                {
+                    "name": "WS-FATAL",
+                    "level": 5,
+                    "start_line": 144,
+                    "picture": "X",
+                    "value": "'N'"
+                },
+                {
+                    "name": "WS-DATE-VALID",
+                    "level": 5,
+                    "start_line": 148,
+                    "picture": "X",
+                    "value": "'N'"
+                },
+                {
+                    "name": "WS-PREV-POLICY",
+                    "level": 5,
+                    "start_line": 152,
+                    "picture": "X(12)",
+                    "value": "LOW-VALUES"
+                },
+                {
+                    "name": "WS-PREV-PREMIUM-POLICY",
+                    "level": 5,
+                    "start_line": 154,
+                    "picture": "X(12)",
+                    "value": "LOW-VALUES"
+                },
+                {
+                    "name": "WS-DATE-IN",
+                    "level": 5,
+                    "start_line": 158,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "WS-YEAR",
+                    "level": 5,
+                    "start_line": 160,
+                    "picture": "9(4)."
+                },
+                {
+                    "name": "WS-MONTH",
+                    "level": 5,
+                    "start_line": 162,
+                    "picture": "99."
+                },
+                {
+                    "name": "WS-DAY",
+                    "level": 5,
+                    "start_line": 164,
+                    "picture": "99."
+                },
+                {
+                    "name": "WS-MAX-DAY",
+                    "level": 5,
+                    "start_line": 166,
+                    "picture": "99."
+                },
+                {
+                    "name": "WS-LEAP",
+                    "level": 5,
+                    "start_line": 168,
+                    "picture": "X."
+                },
+                {
+                    "name": "WS-REM4",
+                    "level": 5,
+                    "start_line": 170,
+                    "picture": "9(4)."
+                },
+                {
+                    "name": "WS-REM100",
+                    "level": 5,
+                    "start_line": 172,
+                    "picture": "9(4)."
+                },
+                {
+                    "name": "WS-REM400",
+                    "level": 5,
+                    "start_line": 174,
+                    "picture": "9(4)."
+                },
+                {
+                    "name": "WS-EFF-INT",
+                    "level": 5,
+                    "start_line": 176,
+                    "picture": "9(9)."
+                },
+                {
+                    "name": "WS-EXP-INT",
+                    "level": 5,
+                    "start_line": 178,
+                    "picture": "9(9)."
+                },
+                {
+                    "name": "WS-CALC-INT",
+                    "level": 5,
+                    "start_line": 180,
+                    "picture": "9(9)."
+                },
+                {
+                    "name": "WS-TERM-DAYS",
+                    "level": 5,
+                    "start_line": 182,
+                    "picture": "9(9)."
+                },
+                {
+                    "name": "WS-EARNED-DAYS",
+                    "level": 5,
+                    "start_line": 184,
+                    "picture": "9(9)."
+                },
+                {
+                    "name": "WS-EARNED",
+                    "level": 5,
+                    "start_line": 188,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "WS-UNEARNED",
+                    "level": 5,
+                    "start_line": 190,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "WS-READ",
+                    "level": 5,
+                    "start_line": 194,
+                    "picture": "9(9)",
+                    "value": "ZERO"
+                },
+                {
+                    "name": "WS-CALCULATED",
+                    "level": 5,
+                    "start_line": 196,
+                    "picture": "9(9)",
+                    "value": "ZERO"
+                },
+                {
+                    "name": "WS-ERRORS",
+                    "level": 5,
+                    "start_line": 198,
+                    "picture": "9(9)",
+                    "value": "ZERO"
+                },
+                {
+                    "name": "WS-IO-ERRORS",
+                    "level": 5,
+                    "start_line": 200,
+                    "picture": "9(9)",
+                    "value": "ZERO"
+                }
+            ]
+        },
+        {
+            "record_name": "WS-SW",
+            "level": 1,
+            "start_line": 132,
+            "fields": [
+                {
+                    "name": "PI-POLICY-NO",
+                    "level": 5,
+                    "start_line": 58,
+                    "picture": "X(12)."
+                },
+                {
+                    "name": "PI-CUSTOMER-ID",
+                    "level": 5,
+                    "start_line": 60,
+                    "picture": "X(9)."
+                },
+                {
+                    "name": "PI-AGENT-ID",
+                    "level": 5,
+                    "start_line": 62,
+                    "picture": "X(9)."
+                },
+                {
+                    "name": "PI-PRODUCT-TYPE",
+                    "level": 5,
+                    "start_line": 64,
+                    "picture": "X(2)."
+                },
+                {
+                    "name": "PI-POLICY-STATUS",
+                    "level": 5,
+                    "start_line": 66,
+                    "picture": "X(2)."
+                },
+                {
+                    "name": "PI-EFFECTIVE-DATE",
+                    "level": 5,
+                    "start_line": 68,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "PI-EXPIRY-DATE",
+                    "level": 5,
+                    "start_line": 70,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "PI-WRITTEN-PREMIUM",
+                    "level": 5,
+                    "start_line": 72,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PI-CREATE-DT",
+                    "level": 5,
+                    "start_line": 74,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "PI-UPDATE-DT",
+                    "level": 5,
+                    "start_line": 76,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "PRI-PREMIUM-ID",
+                    "level": 5,
+                    "start_line": 82,
+                    "picture": "X(12)."
+                },
+                {
+                    "name": "PRI-POLICY-NO",
+                    "level": 5,
+                    "start_line": 84,
+                    "picture": "X(12)."
+                },
+                {
+                    "name": "PRI-WRITTEN-PREMIUM",
+                    "level": 5,
+                    "start_line": 86,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PRI-EARNED-PREMIUM",
+                    "level": 5,
+                    "start_line": 88,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PRI-UNEARNED-PREMIUM",
+                    "level": 5,
+                    "start_line": 90,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PRI-CALCULATION-DATE",
+                    "level": 5,
+                    "start_line": 92,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "PRO-PREMIUM-ID",
+                    "level": 5,
+                    "start_line": 98,
+                    "picture": "X(12)."
+                },
+                {
+                    "name": "PRO-POLICY-NO",
+                    "level": 5,
+                    "start_line": 100,
+                    "picture": "X(12)."
+                },
+                {
+                    "name": "PRO-WRITTEN-PREMIUM",
+                    "level": 5,
+                    "start_line": 102,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PRO-EARNED-PREMIUM",
+                    "level": 5,
+                    "start_line": 104,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PRO-UNEARNED-PREMIUM",
+                    "level": 5,
+                    "start_line": 106,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PRO-CALCULATION-DATE",
+                    "level": 5,
+                    "start_line": 108,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "ER-POLICY-NO",
+                    "level": 5,
+                    "start_line": 114,
+                    "picture": "X(12)."
+                },
+                {
+                    "name": "ER-CODE",
+                    "level": 5,
+                    "start_line": 116,
+                    "picture": "X(4)."
+                },
+                {
+                    "name": "ER-MESSAGE",
+                    "level": 5,
+                    "start_line": 118,
+                    "picture": "X(54)."
+                },
+                {
+                    "name": "WS-PI-ST",
+                    "level": 5,
+                    "start_line": 124,
+                    "picture": "XX",
+                    "value": "SPACES"
+                },
+                {
+                    "name": "WS-PR-ST",
+                    "level": 5,
+                    "start_line": 126,
+                    "picture": "XX",
+                    "value": "SPACES"
+                },
+                {
+                    "name": "WS-PO-ST",
+                    "level": 5,
+                    "start_line": 128,
+                    "picture": "XX",
+                    "value": "SPACES"
+                },
+                {
+                    "name": "WS-ER-ST",
+                    "level": 5,
+                    "start_line": 130,
+                    "picture": "XX",
+                    "value": "SPACES"
+                },
+                {
+                    "name": "WS-POL-EOF",
+                    "level": 5,
+                    "start_line": 134,
+                    "picture": "X",
+                    "value": "'N'"
+                },
+                {
+                    "name": "WS-PREM-EOF",
+                    "level": 5,
+                    "start_line": 138,
+                    "picture": "X",
+                    "value": "'N'"
+                },
+                {
+                    "name": "WS-POL-FOUND",
+                    "level": 5,
+                    "start_line": 142,
+                    "picture": "X",
+                    "value": "'N'"
+                },
+                {
+                    "name": "WS-FATAL",
+                    "level": 5,
+                    "start_line": 144,
+                    "picture": "X",
+                    "value": "'N'"
+                },
+                {
+                    "name": "WS-DATE-VALID",
+                    "level": 5,
+                    "start_line": 148,
+                    "picture": "X",
+                    "value": "'N'"
+                },
+                {
+                    "name": "WS-PREV-POLICY",
+                    "level": 5,
+                    "start_line": 152,
+                    "picture": "X(12)",
+                    "value": "LOW-VALUES"
+                },
+                {
+                    "name": "WS-PREV-PREMIUM-POLICY",
+                    "level": 5,
+                    "start_line": 154,
+                    "picture": "X(12)",
+                    "value": "LOW-VALUES"
+                },
+                {
+                    "name": "WS-DATE-IN",
+                    "level": 5,
+                    "start_line": 158,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "WS-YEAR",
+                    "level": 5,
+                    "start_line": 160,
+                    "picture": "9(4)."
+                },
+                {
+                    "name": "WS-MONTH",
+                    "level": 5,
+                    "start_line": 162,
+                    "picture": "99."
+                },
+                {
+                    "name": "WS-DAY",
+                    "level": 5,
+                    "start_line": 164,
+                    "picture": "99."
+                },
+                {
+                    "name": "WS-MAX-DAY",
+                    "level": 5,
+                    "start_line": 166,
+                    "picture": "99."
+                },
+                {
+                    "name": "WS-LEAP",
+                    "level": 5,
+                    "start_line": 168,
+                    "picture": "X."
+                },
+                {
+                    "name": "WS-REM4",
+                    "level": 5,
+                    "start_line": 170,
+                    "picture": "9(4)."
+                },
+                {
+                    "name": "WS-REM100",
+                    "level": 5,
+                    "start_line": 172,
+                    "picture": "9(4)."
+                },
+                {
+                    "name": "WS-REM400",
+                    "level": 5,
+                    "start_line": 174,
+                    "picture": "9(4)."
+                },
+                {
+                    "name": "WS-EFF-INT",
+                    "level": 5,
+                    "start_line": 176,
+                    "picture": "9(9)."
+                },
+                {
+                    "name": "WS-EXP-INT",
+                    "level": 5,
+                    "start_line": 178,
+                    "picture": "9(9)."
+                },
+                {
+                    "name": "WS-CALC-INT",
+                    "level": 5,
+                    "start_line": 180,
+                    "picture": "9(9)."
+                },
+                {
+                    "name": "WS-TERM-DAYS",
+                    "level": 5,
+                    "start_line": 182,
+                    "picture": "9(9)."
+                },
+                {
+                    "name": "WS-EARNED-DAYS",
+                    "level": 5,
+                    "start_line": 184,
+                    "picture": "9(9)."
+                },
+                {
+                    "name": "WS-EARNED",
+                    "level": 5,
+                    "start_line": 188,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "WS-UNEARNED",
+                    "level": 5,
+                    "start_line": 190,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "WS-READ",
+                    "level": 5,
+                    "start_line": 194,
+                    "picture": "9(9)",
+                    "value": "ZERO"
+                },
+                {
+                    "name": "WS-CALCULATED",
+                    "level": 5,
+                    "start_line": 196,
+                    "picture": "9(9)",
+                    "value": "ZERO"
+                },
+                {
+                    "name": "WS-ERRORS",
+                    "level": 5,
+                    "start_line": 198,
+                    "picture": "9(9)",
+                    "value": "ZERO"
+                },
+                {
+                    "name": "WS-IO-ERRORS",
+                    "level": 5,
+                    "start_line": 200,
+                    "picture": "9(9)",
+                    "value": "ZERO"
+                }
+            ]
+        },
+        {
+            "record_name": "WS-SEQUENCE",
+            "level": 1,
+            "start_line": 150,
+            "fields": [
+                {
+                    "name": "PI-POLICY-NO",
+                    "level": 5,
+                    "start_line": 58,
+                    "picture": "X(12)."
+                },
+                {
+                    "name": "PI-CUSTOMER-ID",
+                    "level": 5,
+                    "start_line": 60,
+                    "picture": "X(9)."
+                },
+                {
+                    "name": "PI-AGENT-ID",
+                    "level": 5,
+                    "start_line": 62,
+                    "picture": "X(9)."
+                },
+                {
+                    "name": "PI-PRODUCT-TYPE",
+                    "level": 5,
+                    "start_line": 64,
+                    "picture": "X(2)."
+                },
+                {
+                    "name": "PI-POLICY-STATUS",
+                    "level": 5,
+                    "start_line": 66,
+                    "picture": "X(2)."
+                },
+                {
+                    "name": "PI-EFFECTIVE-DATE",
+                    "level": 5,
+                    "start_line": 68,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "PI-EXPIRY-DATE",
+                    "level": 5,
+                    "start_line": 70,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "PI-WRITTEN-PREMIUM",
+                    "level": 5,
+                    "start_line": 72,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PI-CREATE-DT",
+                    "level": 5,
+                    "start_line": 74,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "PI-UPDATE-DT",
+                    "level": 5,
+                    "start_line": 76,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "PRI-PREMIUM-ID",
+                    "level": 5,
+                    "start_line": 82,
+                    "picture": "X(12)."
+                },
+                {
+                    "name": "PRI-POLICY-NO",
+                    "level": 5,
+                    "start_line": 84,
+                    "picture": "X(12)."
+                },
+                {
+                    "name": "PRI-WRITTEN-PREMIUM",
+                    "level": 5,
+                    "start_line": 86,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PRI-EARNED-PREMIUM",
+                    "level": 5,
+                    "start_line": 88,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PRI-UNEARNED-PREMIUM",
+                    "level": 5,
+                    "start_line": 90,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PRI-CALCULATION-DATE",
+                    "level": 5,
+                    "start_line": 92,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "PRO-PREMIUM-ID",
+                    "level": 5,
+                    "start_line": 98,
+                    "picture": "X(12)."
+                },
+                {
+                    "name": "PRO-POLICY-NO",
+                    "level": 5,
+                    "start_line": 100,
+                    "picture": "X(12)."
+                },
+                {
+                    "name": "PRO-WRITTEN-PREMIUM",
+                    "level": 5,
+                    "start_line": 102,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PRO-EARNED-PREMIUM",
+                    "level": 5,
+                    "start_line": 104,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PRO-UNEARNED-PREMIUM",
+                    "level": 5,
+                    "start_line": 106,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PRO-CALCULATION-DATE",
+                    "level": 5,
+                    "start_line": 108,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "ER-POLICY-NO",
+                    "level": 5,
+                    "start_line": 114,
+                    "picture": "X(12)."
+                },
+                {
+                    "name": "ER-CODE",
+                    "level": 5,
+                    "start_line": 116,
+                    "picture": "X(4)."
+                },
+                {
+                    "name": "ER-MESSAGE",
+                    "level": 5,
+                    "start_line": 118,
+                    "picture": "X(54)."
+                },
+                {
+                    "name": "WS-PI-ST",
+                    "level": 5,
+                    "start_line": 124,
+                    "picture": "XX",
+                    "value": "SPACES"
+                },
+                {
+                    "name": "WS-PR-ST",
+                    "level": 5,
+                    "start_line": 126,
+                    "picture": "XX",
+                    "value": "SPACES"
+                },
+                {
+                    "name": "WS-PO-ST",
+                    "level": 5,
+                    "start_line": 128,
+                    "picture": "XX",
+                    "value": "SPACES"
+                },
+                {
+                    "name": "WS-ER-ST",
+                    "level": 5,
+                    "start_line": 130,
+                    "picture": "XX",
+                    "value": "SPACES"
+                },
+                {
+                    "name": "WS-POL-EOF",
+                    "level": 5,
+                    "start_line": 134,
+                    "picture": "X",
+                    "value": "'N'"
+                },
+                {
+                    "name": "WS-PREM-EOF",
+                    "level": 5,
+                    "start_line": 138,
+                    "picture": "X",
+                    "value": "'N'"
+                },
+                {
+                    "name": "WS-POL-FOUND",
+                    "level": 5,
+                    "start_line": 142,
+                    "picture": "X",
+                    "value": "'N'"
+                },
+                {
+                    "name": "WS-FATAL",
+                    "level": 5,
+                    "start_line": 144,
+                    "picture": "X",
+                    "value": "'N'"
+                },
+                {
+                    "name": "WS-DATE-VALID",
+                    "level": 5,
+                    "start_line": 148,
+                    "picture": "X",
+                    "value": "'N'"
+                },
+                {
+                    "name": "WS-PREV-POLICY",
+                    "level": 5,
+                    "start_line": 152,
+                    "picture": "X(12)",
+                    "value": "LOW-VALUES"
+                },
+                {
+                    "name": "WS-PREV-PREMIUM-POLICY",
+                    "level": 5,
+                    "start_line": 154,
+                    "picture": "X(12)",
+                    "value": "LOW-VALUES"
+                },
+                {
+                    "name": "WS-DATE-IN",
+                    "level": 5,
+                    "start_line": 158,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "WS-YEAR",
+                    "level": 5,
+                    "start_line": 160,
+                    "picture": "9(4)."
+                },
+                {
+                    "name": "WS-MONTH",
+                    "level": 5,
+                    "start_line": 162,
+                    "picture": "99."
+                },
+                {
+                    "name": "WS-DAY",
+                    "level": 5,
+                    "start_line": 164,
+                    "picture": "99."
+                },
+                {
+                    "name": "WS-MAX-DAY",
+                    "level": 5,
+                    "start_line": 166,
+                    "picture": "99."
+                },
+                {
+                    "name": "WS-LEAP",
+                    "level": 5,
+                    "start_line": 168,
+                    "picture": "X."
+                },
+                {
+                    "name": "WS-REM4",
+                    "level": 5,
+                    "start_line": 170,
+                    "picture": "9(4)."
+                },
+                {
+                    "name": "WS-REM100",
+                    "level": 5,
+                    "start_line": 172,
+                    "picture": "9(4)."
+                },
+                {
+                    "name": "WS-REM400",
+                    "level": 5,
+                    "start_line": 174,
+                    "picture": "9(4)."
+                },
+                {
+                    "name": "WS-EFF-INT",
+                    "level": 5,
+                    "start_line": 176,
+                    "picture": "9(9)."
+                },
+                {
+                    "name": "WS-EXP-INT",
+                    "level": 5,
+                    "start_line": 178,
+                    "picture": "9(9)."
+                },
+                {
+                    "name": "WS-CALC-INT",
+                    "level": 5,
+                    "start_line": 180,
+                    "picture": "9(9)."
+                },
+                {
+                    "name": "WS-TERM-DAYS",
+                    "level": 5,
+                    "start_line": 182,
+                    "picture": "9(9)."
+                },
+                {
+                    "name": "WS-EARNED-DAYS",
+                    "level": 5,
+                    "start_line": 184,
+                    "picture": "9(9)."
+                },
+                {
+                    "name": "WS-EARNED",
+                    "level": 5,
+                    "start_line": 188,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "WS-UNEARNED",
+                    "level": 5,
+                    "start_line": 190,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "WS-READ",
+                    "level": 5,
+                    "start_line": 194,
+                    "picture": "9(9)",
+                    "value": "ZERO"
+                },
+                {
+                    "name": "WS-CALCULATED",
+                    "level": 5,
+                    "start_line": 196,
+                    "picture": "9(9)",
+                    "value": "ZERO"
+                },
+                {
+                    "name": "WS-ERRORS",
+                    "level": 5,
+                    "start_line": 198,
+                    "picture": "9(9)",
+                    "value": "ZERO"
+                },
+                {
+                    "name": "WS-IO-ERRORS",
+                    "level": 5,
+                    "start_line": 200,
+                    "picture": "9(9)",
+                    "value": "ZERO"
+                }
+            ]
+        },
+        {
+            "record_name": "WS-DATE-WORK",
+            "level": 1,
+            "start_line": 156,
+            "fields": [
+                {
+                    "name": "PI-POLICY-NO",
+                    "level": 5,
+                    "start_line": 58,
+                    "picture": "X(12)."
+                },
+                {
+                    "name": "PI-CUSTOMER-ID",
+                    "level": 5,
+                    "start_line": 60,
+                    "picture": "X(9)."
+                },
+                {
+                    "name": "PI-AGENT-ID",
+                    "level": 5,
+                    "start_line": 62,
+                    "picture": "X(9)."
+                },
+                {
+                    "name": "PI-PRODUCT-TYPE",
+                    "level": 5,
+                    "start_line": 64,
+                    "picture": "X(2)."
+                },
+                {
+                    "name": "PI-POLICY-STATUS",
+                    "level": 5,
+                    "start_line": 66,
+                    "picture": "X(2)."
+                },
+                {
+                    "name": "PI-EFFECTIVE-DATE",
+                    "level": 5,
+                    "start_line": 68,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "PI-EXPIRY-DATE",
+                    "level": 5,
+                    "start_line": 70,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "PI-WRITTEN-PREMIUM",
+                    "level": 5,
+                    "start_line": 72,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PI-CREATE-DT",
+                    "level": 5,
+                    "start_line": 74,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "PI-UPDATE-DT",
+                    "level": 5,
+                    "start_line": 76,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "PRI-PREMIUM-ID",
+                    "level": 5,
+                    "start_line": 82,
+                    "picture": "X(12)."
+                },
+                {
+                    "name": "PRI-POLICY-NO",
+                    "level": 5,
+                    "start_line": 84,
+                    "picture": "X(12)."
+                },
+                {
+                    "name": "PRI-WRITTEN-PREMIUM",
+                    "level": 5,
+                    "start_line": 86,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PRI-EARNED-PREMIUM",
+                    "level": 5,
+                    "start_line": 88,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PRI-UNEARNED-PREMIUM",
+                    "level": 5,
+                    "start_line": 90,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PRI-CALCULATION-DATE",
+                    "level": 5,
+                    "start_line": 92,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "PRO-PREMIUM-ID",
+                    "level": 5,
+                    "start_line": 98,
+                    "picture": "X(12)."
+                },
+                {
+                    "name": "PRO-POLICY-NO",
+                    "level": 5,
+                    "start_line": 100,
+                    "picture": "X(12)."
+                },
+                {
+                    "name": "PRO-WRITTEN-PREMIUM",
+                    "level": 5,
+                    "start_line": 102,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PRO-EARNED-PREMIUM",
+                    "level": 5,
+                    "start_line": 104,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PRO-UNEARNED-PREMIUM",
+                    "level": 5,
+                    "start_line": 106,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PRO-CALCULATION-DATE",
+                    "level": 5,
+                    "start_line": 108,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "ER-POLICY-NO",
+                    "level": 5,
+                    "start_line": 114,
+                    "picture": "X(12)."
+                },
+                {
+                    "name": "ER-CODE",
+                    "level": 5,
+                    "start_line": 116,
+                    "picture": "X(4)."
+                },
+                {
+                    "name": "ER-MESSAGE",
+                    "level": 5,
+                    "start_line": 118,
+                    "picture": "X(54)."
+                },
+                {
+                    "name": "WS-PI-ST",
+                    "level": 5,
+                    "start_line": 124,
+                    "picture": "XX",
+                    "value": "SPACES"
+                },
+                {
+                    "name": "WS-PR-ST",
+                    "level": 5,
+                    "start_line": 126,
+                    "picture": "XX",
+                    "value": "SPACES"
+                },
+                {
+                    "name": "WS-PO-ST",
+                    "level": 5,
+                    "start_line": 128,
+                    "picture": "XX",
+                    "value": "SPACES"
+                },
+                {
+                    "name": "WS-ER-ST",
+                    "level": 5,
+                    "start_line": 130,
+                    "picture": "XX",
+                    "value": "SPACES"
+                },
+                {
+                    "name": "WS-POL-EOF",
+                    "level": 5,
+                    "start_line": 134,
+                    "picture": "X",
+                    "value": "'N'"
+                },
+                {
+                    "name": "WS-PREM-EOF",
+                    "level": 5,
+                    "start_line": 138,
+                    "picture": "X",
+                    "value": "'N'"
+                },
+                {
+                    "name": "WS-POL-FOUND",
+                    "level": 5,
+                    "start_line": 142,
+                    "picture": "X",
+                    "value": "'N'"
+                },
+                {
+                    "name": "WS-FATAL",
+                    "level": 5,
+                    "start_line": 144,
+                    "picture": "X",
+                    "value": "'N'"
+                },
+                {
+                    "name": "WS-DATE-VALID",
+                    "level": 5,
+                    "start_line": 148,
+                    "picture": "X",
+                    "value": "'N'"
+                },
+                {
+                    "name": "WS-PREV-POLICY",
+                    "level": 5,
+                    "start_line": 152,
+                    "picture": "X(12)",
+                    "value": "LOW-VALUES"
+                },
+                {
+                    "name": "WS-PREV-PREMIUM-POLICY",
+                    "level": 5,
+                    "start_line": 154,
+                    "picture": "X(12)",
+                    "value": "LOW-VALUES"
+                },
+                {
+                    "name": "WS-DATE-IN",
+                    "level": 5,
+                    "start_line": 158,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "WS-YEAR",
+                    "level": 5,
+                    "start_line": 160,
+                    "picture": "9(4)."
+                },
+                {
+                    "name": "WS-MONTH",
+                    "level": 5,
+                    "start_line": 162,
+                    "picture": "99."
+                },
+                {
+                    "name": "WS-DAY",
+                    "level": 5,
+                    "start_line": 164,
+                    "picture": "99."
+                },
+                {
+                    "name": "WS-MAX-DAY",
+                    "level": 5,
+                    "start_line": 166,
+                    "picture": "99."
+                },
+                {
+                    "name": "WS-LEAP",
+                    "level": 5,
+                    "start_line": 168,
+                    "picture": "X."
+                },
+                {
+                    "name": "WS-REM4",
+                    "level": 5,
+                    "start_line": 170,
+                    "picture": "9(4)."
+                },
+                {
+                    "name": "WS-REM100",
+                    "level": 5,
+                    "start_line": 172,
+                    "picture": "9(4)."
+                },
+                {
+                    "name": "WS-REM400",
+                    "level": 5,
+                    "start_line": 174,
+                    "picture": "9(4)."
+                },
+                {
+                    "name": "WS-EFF-INT",
+                    "level": 5,
+                    "start_line": 176,
+                    "picture": "9(9)."
+                },
+                {
+                    "name": "WS-EXP-INT",
+                    "level": 5,
+                    "start_line": 178,
+                    "picture": "9(9)."
+                },
+                {
+                    "name": "WS-CALC-INT",
+                    "level": 5,
+                    "start_line": 180,
+                    "picture": "9(9)."
+                },
+                {
+                    "name": "WS-TERM-DAYS",
+                    "level": 5,
+                    "start_line": 182,
+                    "picture": "9(9)."
+                },
+                {
+                    "name": "WS-EARNED-DAYS",
+                    "level": 5,
+                    "start_line": 184,
+                    "picture": "9(9)."
+                },
+                {
+                    "name": "WS-EARNED",
+                    "level": 5,
+                    "start_line": 188,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "WS-UNEARNED",
+                    "level": 5,
+                    "start_line": 190,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "WS-READ",
+                    "level": 5,
+                    "start_line": 194,
+                    "picture": "9(9)",
+                    "value": "ZERO"
+                },
+                {
+                    "name": "WS-CALCULATED",
+                    "level": 5,
+                    "start_line": 196,
+                    "picture": "9(9)",
+                    "value": "ZERO"
+                },
+                {
+                    "name": "WS-ERRORS",
+                    "level": 5,
+                    "start_line": 198,
+                    "picture": "9(9)",
+                    "value": "ZERO"
+                },
+                {
+                    "name": "WS-IO-ERRORS",
+                    "level": 5,
+                    "start_line": 200,
+                    "picture": "9(9)",
+                    "value": "ZERO"
+                }
+            ]
+        },
+        {
+            "record_name": "WS-AMOUNTS",
+            "level": 1,
+            "start_line": 186,
+            "fields": [
+                {
+                    "name": "PI-POLICY-NO",
+                    "level": 5,
+                    "start_line": 58,
+                    "picture": "X(12)."
+                },
+                {
+                    "name": "PI-CUSTOMER-ID",
+                    "level": 5,
+                    "start_line": 60,
+                    "picture": "X(9)."
+                },
+                {
+                    "name": "PI-AGENT-ID",
+                    "level": 5,
+                    "start_line": 62,
+                    "picture": "X(9)."
+                },
+                {
+                    "name": "PI-PRODUCT-TYPE",
+                    "level": 5,
+                    "start_line": 64,
+                    "picture": "X(2)."
+                },
+                {
+                    "name": "PI-POLICY-STATUS",
+                    "level": 5,
+                    "start_line": 66,
+                    "picture": "X(2)."
+                },
+                {
+                    "name": "PI-EFFECTIVE-DATE",
+                    "level": 5,
+                    "start_line": 68,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "PI-EXPIRY-DATE",
+                    "level": 5,
+                    "start_line": 70,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "PI-WRITTEN-PREMIUM",
+                    "level": 5,
+                    "start_line": 72,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PI-CREATE-DT",
+                    "level": 5,
+                    "start_line": 74,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "PI-UPDATE-DT",
+                    "level": 5,
+                    "start_line": 76,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "PRI-PREMIUM-ID",
+                    "level": 5,
+                    "start_line": 82,
+                    "picture": "X(12)."
+                },
+                {
+                    "name": "PRI-POLICY-NO",
+                    "level": 5,
+                    "start_line": 84,
+                    "picture": "X(12)."
+                },
+                {
+                    "name": "PRI-WRITTEN-PREMIUM",
+                    "level": 5,
+                    "start_line": 86,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PRI-EARNED-PREMIUM",
+                    "level": 5,
+                    "start_line": 88,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PRI-UNEARNED-PREMIUM",
+                    "level": 5,
+                    "start_line": 90,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PRI-CALCULATION-DATE",
+                    "level": 5,
+                    "start_line": 92,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "PRO-PREMIUM-ID",
+                    "level": 5,
+                    "start_line": 98,
+                    "picture": "X(12)."
+                },
+                {
+                    "name": "PRO-POLICY-NO",
+                    "level": 5,
+                    "start_line": 100,
+                    "picture": "X(12)."
+                },
+                {
+                    "name": "PRO-WRITTEN-PREMIUM",
+                    "level": 5,
+                    "start_line": 102,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PRO-EARNED-PREMIUM",
+                    "level": 5,
+                    "start_line": 104,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PRO-UNEARNED-PREMIUM",
+                    "level": 5,
+                    "start_line": 106,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PRO-CALCULATION-DATE",
+                    "level": 5,
+                    "start_line": 108,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "ER-POLICY-NO",
+                    "level": 5,
+                    "start_line": 114,
+                    "picture": "X(12)."
+                },
+                {
+                    "name": "ER-CODE",
+                    "level": 5,
+                    "start_line": 116,
+                    "picture": "X(4)."
+                },
+                {
+                    "name": "ER-MESSAGE",
+                    "level": 5,
+                    "start_line": 118,
+                    "picture": "X(54)."
+                },
+                {
+                    "name": "WS-PI-ST",
+                    "level": 5,
+                    "start_line": 124,
+                    "picture": "XX",
+                    "value": "SPACES"
+                },
+                {
+                    "name": "WS-PR-ST",
+                    "level": 5,
+                    "start_line": 126,
+                    "picture": "XX",
+                    "value": "SPACES"
+                },
+                {
+                    "name": "WS-PO-ST",
+                    "level": 5,
+                    "start_line": 128,
+                    "picture": "XX",
+                    "value": "SPACES"
+                },
+                {
+                    "name": "WS-ER-ST",
+                    "level": 5,
+                    "start_line": 130,
+                    "picture": "XX",
+                    "value": "SPACES"
+                },
+                {
+                    "name": "WS-POL-EOF",
+                    "level": 5,
+                    "start_line": 134,
+                    "picture": "X",
+                    "value": "'N'"
+                },
+                {
+                    "name": "WS-PREM-EOF",
+                    "level": 5,
+                    "start_line": 138,
+                    "picture": "X",
+                    "value": "'N'"
+                },
+                {
+                    "name": "WS-POL-FOUND",
+                    "level": 5,
+                    "start_line": 142,
+                    "picture": "X",
+                    "value": "'N'"
+                },
+                {
+                    "name": "WS-FATAL",
+                    "level": 5,
+                    "start_line": 144,
+                    "picture": "X",
+                    "value": "'N'"
+                },
+                {
+                    "name": "WS-DATE-VALID",
+                    "level": 5,
+                    "start_line": 148,
+                    "picture": "X",
+                    "value": "'N'"
+                },
+                {
+                    "name": "WS-PREV-POLICY",
+                    "level": 5,
+                    "start_line": 152,
+                    "picture": "X(12)",
+                    "value": "LOW-VALUES"
+                },
+                {
+                    "name": "WS-PREV-PREMIUM-POLICY",
+                    "level": 5,
+                    "start_line": 154,
+                    "picture": "X(12)",
+                    "value": "LOW-VALUES"
+                },
+                {
+                    "name": "WS-DATE-IN",
+                    "level": 5,
+                    "start_line": 158,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "WS-YEAR",
+                    "level": 5,
+                    "start_line": 160,
+                    "picture": "9(4)."
+                },
+                {
+                    "name": "WS-MONTH",
+                    "level": 5,
+                    "start_line": 162,
+                    "picture": "99."
+                },
+                {
+                    "name": "WS-DAY",
+                    "level": 5,
+                    "start_line": 164,
+                    "picture": "99."
+                },
+                {
+                    "name": "WS-MAX-DAY",
+                    "level": 5,
+                    "start_line": 166,
+                    "picture": "99."
+                },
+                {
+                    "name": "WS-LEAP",
+                    "level": 5,
+                    "start_line": 168,
+                    "picture": "X."
+                },
+                {
+                    "name": "WS-REM4",
+                    "level": 5,
+                    "start_line": 170,
+                    "picture": "9(4)."
+                },
+                {
+                    "name": "WS-REM100",
+                    "level": 5,
+                    "start_line": 172,
+                    "picture": "9(4)."
+                },
+                {
+                    "name": "WS-REM400",
+                    "level": 5,
+                    "start_line": 174,
+                    "picture": "9(4)."
+                },
+                {
+                    "name": "WS-EFF-INT",
+                    "level": 5,
+                    "start_line": 176,
+                    "picture": "9(9)."
+                },
+                {
+                    "name": "WS-EXP-INT",
+                    "level": 5,
+                    "start_line": 178,
+                    "picture": "9(9)."
+                },
+                {
+                    "name": "WS-CALC-INT",
+                    "level": 5,
+                    "start_line": 180,
+                    "picture": "9(9)."
+                },
+                {
+                    "name": "WS-TERM-DAYS",
+                    "level": 5,
+                    "start_line": 182,
+                    "picture": "9(9)."
+                },
+                {
+                    "name": "WS-EARNED-DAYS",
+                    "level": 5,
+                    "start_line": 184,
+                    "picture": "9(9)."
+                },
+                {
+                    "name": "WS-EARNED",
+                    "level": 5,
+                    "start_line": 188,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "WS-UNEARNED",
+                    "level": 5,
+                    "start_line": 190,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "WS-READ",
+                    "level": 5,
+                    "start_line": 194,
+                    "picture": "9(9)",
+                    "value": "ZERO"
+                },
+                {
+                    "name": "WS-CALCULATED",
+                    "level": 5,
+                    "start_line": 196,
+                    "picture": "9(9)",
+                    "value": "ZERO"
+                },
+                {
+                    "name": "WS-ERRORS",
+                    "level": 5,
+                    "start_line": 198,
+                    "picture": "9(9)",
+                    "value": "ZERO"
+                },
+                {
+                    "name": "WS-IO-ERRORS",
+                    "level": 5,
+                    "start_line": 200,
+                    "picture": "9(9)",
+                    "value": "ZERO"
+                }
+            ]
+        },
+        {
+            "record_name": "WS-COUNTERS",
+            "level": 1,
+            "start_line": 192,
+            "fields": [
+                {
+                    "name": "PI-POLICY-NO",
+                    "level": 5,
+                    "start_line": 58,
+                    "picture": "X(12)."
+                },
+                {
+                    "name": "PI-CUSTOMER-ID",
+                    "level": 5,
+                    "start_line": 60,
+                    "picture": "X(9)."
+                },
+                {
+                    "name": "PI-AGENT-ID",
+                    "level": 5,
+                    "start_line": 62,
+                    "picture": "X(9)."
+                },
+                {
+                    "name": "PI-PRODUCT-TYPE",
+                    "level": 5,
+                    "start_line": 64,
+                    "picture": "X(2)."
+                },
+                {
+                    "name": "PI-POLICY-STATUS",
+                    "level": 5,
+                    "start_line": 66,
+                    "picture": "X(2)."
+                },
+                {
+                    "name": "PI-EFFECTIVE-DATE",
+                    "level": 5,
+                    "start_line": 68,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "PI-EXPIRY-DATE",
+                    "level": 5,
+                    "start_line": 70,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "PI-WRITTEN-PREMIUM",
+                    "level": 5,
+                    "start_line": 72,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PI-CREATE-DT",
+                    "level": 5,
+                    "start_line": 74,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "PI-UPDATE-DT",
+                    "level": 5,
+                    "start_line": 76,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "PRI-PREMIUM-ID",
+                    "level": 5,
+                    "start_line": 82,
+                    "picture": "X(12)."
+                },
+                {
+                    "name": "PRI-POLICY-NO",
+                    "level": 5,
+                    "start_line": 84,
+                    "picture": "X(12)."
+                },
+                {
+                    "name": "PRI-WRITTEN-PREMIUM",
+                    "level": 5,
+                    "start_line": 86,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PRI-EARNED-PREMIUM",
+                    "level": 5,
+                    "start_line": 88,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PRI-UNEARNED-PREMIUM",
+                    "level": 5,
+                    "start_line": 90,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PRI-CALCULATION-DATE",
+                    "level": 5,
+                    "start_line": 92,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "PRO-PREMIUM-ID",
+                    "level": 5,
+                    "start_line": 98,
+                    "picture": "X(12)."
+                },
+                {
+                    "name": "PRO-POLICY-NO",
+                    "level": 5,
+                    "start_line": 100,
+                    "picture": "X(12)."
+                },
+                {
+                    "name": "PRO-WRITTEN-PREMIUM",
+                    "level": 5,
+                    "start_line": 102,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PRO-EARNED-PREMIUM",
+                    "level": 5,
+                    "start_line": 104,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PRO-UNEARNED-PREMIUM",
+                    "level": 5,
+                    "start_line": 106,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "PRO-CALCULATION-DATE",
+                    "level": 5,
+                    "start_line": 108,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "ER-POLICY-NO",
+                    "level": 5,
+                    "start_line": 114,
+                    "picture": "X(12)."
+                },
+                {
+                    "name": "ER-CODE",
+                    "level": 5,
+                    "start_line": 116,
+                    "picture": "X(4)."
+                },
+                {
+                    "name": "ER-MESSAGE",
+                    "level": 5,
+                    "start_line": 118,
+                    "picture": "X(54)."
+                },
+                {
+                    "name": "WS-PI-ST",
+                    "level": 5,
+                    "start_line": 124,
+                    "picture": "XX",
+                    "value": "SPACES"
+                },
+                {
+                    "name": "WS-PR-ST",
+                    "level": 5,
+                    "start_line": 126,
+                    "picture": "XX",
+                    "value": "SPACES"
+                },
+                {
+                    "name": "WS-PO-ST",
+                    "level": 5,
+                    "start_line": 128,
+                    "picture": "XX",
+                    "value": "SPACES"
+                },
+                {
+                    "name": "WS-ER-ST",
+                    "level": 5,
+                    "start_line": 130,
+                    "picture": "XX",
+                    "value": "SPACES"
+                },
+                {
+                    "name": "WS-POL-EOF",
+                    "level": 5,
+                    "start_line": 134,
+                    "picture": "X",
+                    "value": "'N'"
+                },
+                {
+                    "name": "WS-PREM-EOF",
+                    "level": 5,
+                    "start_line": 138,
+                    "picture": "X",
+                    "value": "'N'"
+                },
+                {
+                    "name": "WS-POL-FOUND",
+                    "level": 5,
+                    "start_line": 142,
+                    "picture": "X",
+                    "value": "'N'"
+                },
+                {
+                    "name": "WS-FATAL",
+                    "level": 5,
+                    "start_line": 144,
+                    "picture": "X",
+                    "value": "'N'"
+                },
+                {
+                    "name": "WS-DATE-VALID",
+                    "level": 5,
+                    "start_line": 148,
+                    "picture": "X",
+                    "value": "'N'"
+                },
+                {
+                    "name": "WS-PREV-POLICY",
+                    "level": 5,
+                    "start_line": 152,
+                    "picture": "X(12)",
+                    "value": "LOW-VALUES"
+                },
+                {
+                    "name": "WS-PREV-PREMIUM-POLICY",
+                    "level": 5,
+                    "start_line": 154,
+                    "picture": "X(12)",
+                    "value": "LOW-VALUES"
+                },
+                {
+                    "name": "WS-DATE-IN",
+                    "level": 5,
+                    "start_line": 158,
+                    "picture": "9(8)."
+                },
+                {
+                    "name": "WS-YEAR",
+                    "level": 5,
+                    "start_line": 160,
+                    "picture": "9(4)."
+                },
+                {
+                    "name": "WS-MONTH",
+                    "level": 5,
+                    "start_line": 162,
+                    "picture": "99."
+                },
+                {
+                    "name": "WS-DAY",
+                    "level": 5,
+                    "start_line": 164,
+                    "picture": "99."
+                },
+                {
+                    "name": "WS-MAX-DAY",
+                    "level": 5,
+                    "start_line": 166,
+                    "picture": "99."
+                },
+                {
+                    "name": "WS-LEAP",
+                    "level": 5,
+                    "start_line": 168,
+                    "picture": "X."
+                },
+                {
+                    "name": "WS-REM4",
+                    "level": 5,
+                    "start_line": 170,
+                    "picture": "9(4)."
+                },
+                {
+                    "name": "WS-REM100",
+                    "level": 5,
+                    "start_line": 172,
+                    "picture": "9(4)."
+                },
+                {
+                    "name": "WS-REM400",
+                    "level": 5,
+                    "start_line": 174,
+                    "picture": "9(4)."
+                },
+                {
+                    "name": "WS-EFF-INT",
+                    "level": 5,
+                    "start_line": 176,
+                    "picture": "9(9)."
+                },
+                {
+                    "name": "WS-EXP-INT",
+                    "level": 5,
+                    "start_line": 178,
+                    "picture": "9(9)."
+                },
+                {
+                    "name": "WS-CALC-INT",
+                    "level": 5,
+                    "start_line": 180,
+                    "picture": "9(9)."
+                },
+                {
+                    "name": "WS-TERM-DAYS",
+                    "level": 5,
+                    "start_line": 182,
+                    "picture": "9(9)."
+                },
+                {
+                    "name": "WS-EARNED-DAYS",
+                    "level": 5,
+                    "start_line": 184,
+                    "picture": "9(9)."
+                },
+                {
+                    "name": "WS-EARNED",
+                    "level": 5,
+                    "start_line": 188,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "WS-UNEARNED",
+                    "level": 5,
+                    "start_line": 190,
+                    "picture": "9(9)V99."
+                },
+                {
+                    "name": "WS-READ",
+                    "level": 5,
+                    "start_line": 194,
+                    "picture": "9(9)",
+                    "value": "ZERO"
+                },
+                {
+                    "name": "WS-CALCULATED",
+                    "level": 5,
+                    "start_line": 196,
+                    "picture": "9(9)",
+                    "value": "ZERO"
+                },
+                {
+                    "name": "WS-ERRORS",
+                    "level": 5,
+                    "start_line": 198,
+                    "picture": "9(9)",
+                    "value": "ZERO"
+                },
+                {
+                    "name": "WS-IO-ERRORS",
+                    "level": 5,
+                    "start_line": 200,
+                    "picture": "9(9)",
+                    "value": "ZERO"
+                }
+            ]
+        }
+    ],
+    "copybooks": [],
+    "operations": {
+        "perform": [
+            "PERFORM OPEN-FILES IF FATAL-ERROR GOBACK END-IF PERFORM READ-POLICY PERFORM UNTIL PREM-EOF OR FATAL-ERROR PERFORM READ-PREMIUM IF NOT PREM-EOF AND NOT FATAL-ERROR ADD 1 TO WS-READ PERFORM PROCESS-PREMIUM END-IF END-PERFORM PERFORM CLOSE-FILES DISPLAY 'EARNPREM READ : ' WS-READ DISPLAY 'EARNPREM CALCULATED : ' WS-CALCULATED DISPLAY 'EARNPREM ERRORS : ' WS-ERRORS DISPLAY 'EARNPREM I/O ERRORS : ' WS-IO-ERRORS IF FATAL-ERROR MOVE 12 TO RETURN-CODE END-IF GOBACK.",
+            "PERFORM FIND-POLICY IF WS-POL-FOUND = 'Y' PERFORM VALIDATE-DATES ELSE MOVE 'E001' TO ER-CODE MOVE 'POLICY NOT FOUND FOR PREMIUM RECORD' TO ER-MESSAGE PERFORM WRITE-ERROR END-IF.",
+            "PERFORM UNTIL POL-EOF OR FATAL-ERROR IF PI-POLICY-NO < PRI-POLICY-NO PERFORM READ-POLICY ELSE IF PI-POLICY-NO = PRI-POLICY-NO MOVE 'Y' TO WS-POL-FOUND END-IF EXIT PERFORM END-IF END-PERFORM.",
+            "PERFORM VALIDATE-CALENDAR-DATE IF WS-DATE-VALID NOT = 'Y' MOVE 'E002' TO ER-CODE MOVE 'INVALID POLICY EFFECTIVE DATE' TO ER-MESSAGE PERFORM WRITE-ERROR ELSE MOVE PI-EXPIRY-DATE TO WS-DATE-IN PERFORM VALIDATE-CALENDAR-DATE IF WS-DATE-VALID NOT = 'Y' MOVE 'E003' TO ER-CODE MOVE 'INVALID POLICY EXPIRY DATE' TO ER-MESSAGE PERFORM WRITE-ERROR ELSE MOVE PRI-CALCULATION-DATE TO WS-DATE-IN PERFORM VALIDATE-CALENDAR-DATE IF WS-DATE-VALID NOT = 'Y' MOVE 'E006' TO ER-CODE MOVE 'INVALID PREMIUM CALCULATION DATE' TO ER-MESSAGE PERFORM WRITE-ERROR ELSE IF PI-EXPIRY-DATE < PI-EFFECTIVE-DATE MOVE 'E004' TO ER-CODE MOVE 'EXPIRY DATE BEFORE EFFECTIVE DATE' TO ER-MESSAGE PERFORM WRITE-ERROR ELSE PERFORM CALCULATE-EARNED END-IF END-IF END-IF END-IF.",
+            "PERFORM SET-MAX-DAY IF WS-DAY >= 1 AND WS-DAY <= WS-MAX-DAY MOVE 'Y' TO WS-DATE-VALID END-IF END-IF END-IF.",
+            "PERFORM CHECK-LEAP-YEAR IF WS-LEAP = 'Y' MOVE 29 TO WS-MAX-DAY ELSE MOVE 28 TO WS-MAX-DAY END-IF END-EVALUATE.",
+            "PERFORM WRITE-ERROR ELSE IF WS-CALC-INT < WS-EFF-INT MOVE ZERO TO WS-EARNED-DAYS ELSE IF WS-CALC-INT > WS-EXP-INT MOVE WS-TERM-DAYS TO WS-EARNED-DAYS ELSE COMPUTE WS-EARNED-DAYS = WS-CALC-INT - WS-EFF-INT + 1 END-IF END-IF COMPUTE WS-EARNED ROUNDED = PRI-WRITTEN-PREMIUM * WS-EARNED-DAYS / WS-TERM-DAYS IF WS-EARNED > PRI-WRITTEN-PREMIUM MOVE PRI-WRITTEN-PREMIUM TO WS-EARNED END-IF COMPUTE WS-UNEARNED = PRI-WRITTEN-PREMIUM - WS-EARNED IF WS-UNEARNED < ZERO MOVE ZERO TO WS-UNEARNED END-IF PERFORM WRITE-RESULT END-IF."
+        ],
+        "read": [
+            "READ PIC 9(9) VALUE ZERO.",
+            "READ PERFORM PROCESS-PREMIUM END-IF END-PERFORM PERFORM CLOSE-FILES DISPLAY 'EARNPREM READ : ' WS-READ DISPLAY 'EARNPREM CALCULATED : ' WS-CALCULATED DISPLAY 'EARNPREM ERRORS : ' WS-ERRORS DISPLAY 'EARNPREM I/O ERRORS : ' WS-IO-ERRORS IF FATAL-ERROR MOVE 12 TO RETURN-CODE END-IF GOBACK.",
+            "READ POLICY-IN AT END MOVE 'Y' TO WS-POL-EOF NOT AT END IF WS-PI-ST NOT = '00' DISPLAY 'POLICY READ ERROR ' WS-PI-ST ADD 1 TO WS-IO-ERRORS SET FATAL-ERROR TO TRUE ELSE IF WS-PREV-POLICY NOT = LOW-VALUES AND PI-POLICY-NO < WS-PREV-POLICY DISPLAY 'POLICY INPUT OUT OF ORDER: ' PI-POLICY-NO ADD 1 TO WS-IO-ERRORS SET FATAL-ERROR TO TRUE ELSE MOVE PI-POLICY-NO TO WS-PREV-POLICY END-IF END-IF END-READ END-IF.",
+            "READ PREMIUM-IN AT END MOVE 'Y' TO WS-PREM-EOF NOT AT END IF WS-PR-ST NOT = '00' DISPLAY 'PREMIUM READ ERROR ' WS-PR-ST ADD 1 TO WS-IO-ERRORS SET FATAL-ERROR TO TRUE ELSE IF WS-PREV-PREMIUM-POLICY NOT = LOW-VALUES AND PRI-POLICY-NO < WS-PREV-PREMIUM-POLICY DISPLAY 'PREMIUM INPUT OUT OF ORDER: ' PRI-POLICY-NO ADD 1 TO WS-IO-ERRORS SET FATAL-ERROR TO TRUE ELSE MOVE PRI-POLICY-NO TO WS-PREV-PREMIUM-POLICY END-IF END-IF END-READ END-IF."
+        ],
+        "write": [
+            "WRITE PRO-REC IF WS-PO-ST = '00' ADD 1 TO WS-CALCULATED ELSE DISPLAY 'PREMIUM OUTPUT WRITE ERROR ' WS-PO-ST ADD 1 TO WS-IO-ERRORS SET FATAL-ERROR TO TRUE END-IF.",
+            "WRITE ER-REC IF WS-ER-ST = '00' ADD 1 TO WS-ERRORS ELSE DISPLAY 'ERROR OUTPUT WRITE ERROR ' WS-ER-ST ADD 1 TO WS-IO-ERRORS SET FATAL-ERROR TO TRUE END-IF."
+        ],
+        "move": [
+            "MOVE 12 TO RETURN-CODE END-IF GOBACK.",
+            "MOVE 'Y' TO WS-POL-EOF NOT AT END IF WS-PI-ST NOT = '00' DISPLAY 'POLICY READ ERROR ' WS-PI-ST ADD 1 TO WS-IO-ERRORS SET FATAL-ERROR TO TRUE ELSE IF WS-PREV-POLICY NOT = LOW-VALUES AND PI-POLICY-NO < WS-PREV-POLICY DISPLAY 'POLICY INPUT OUT OF ORDER: ' PI-POLICY-NO ADD 1 TO WS-IO-ERRORS SET FATAL-ERROR TO TRUE ELSE MOVE PI-POLICY-NO TO WS-PREV-POLICY END-IF END-IF END-READ END-IF.",
+            "MOVE 'Y' TO WS-PREM-EOF NOT AT END IF WS-PR-ST NOT = '00' DISPLAY 'PREMIUM READ ERROR ' WS-PR-ST ADD 1 TO WS-IO-ERRORS SET FATAL-ERROR TO TRUE ELSE IF WS-PREV-PREMIUM-POLICY NOT = LOW-VALUES AND PRI-POLICY-NO < WS-PREV-PREMIUM-POLICY DISPLAY 'PREMIUM INPUT OUT OF ORDER: ' PRI-POLICY-NO ADD 1 TO WS-IO-ERRORS SET FATAL-ERROR TO TRUE ELSE MOVE PRI-POLICY-NO TO WS-PREV-PREMIUM-POLICY END-IF END-IF END-READ END-IF.",
+            "MOVE 'N' TO WS-POL-FOUND PERFORM FIND-POLICY IF WS-POL-FOUND = 'Y' PERFORM VALIDATE-DATES ELSE MOVE 'E001' TO ER-CODE MOVE 'POLICY NOT FOUND FOR PREMIUM RECORD' TO ER-MESSAGE PERFORM WRITE-ERROR END-IF.",
+            "MOVE 'Y' TO WS-POL-FOUND END-IF EXIT PERFORM END-IF END-PERFORM.",
+            "MOVE PI-EFFECTIVE-DATE TO WS-DATE-IN PERFORM VALIDATE-CALENDAR-DATE IF WS-DATE-VALID NOT = 'Y' MOVE 'E002' TO ER-CODE MOVE 'INVALID POLICY EFFECTIVE DATE' TO ER-MESSAGE PERFORM WRITE-ERROR ELSE MOVE PI-EXPIRY-DATE TO WS-DATE-IN PERFORM VALIDATE-CALENDAR-DATE IF WS-DATE-VALID NOT = 'Y' MOVE 'E003' TO ER-CODE MOVE 'INVALID POLICY EXPIRY DATE' TO ER-MESSAGE PERFORM WRITE-ERROR ELSE MOVE PRI-CALCULATION-DATE TO WS-DATE-IN PERFORM VALIDATE-CALENDAR-DATE IF WS-DATE-VALID NOT = 'Y' MOVE 'E006' TO ER-CODE MOVE 'INVALID PREMIUM CALCULATION DATE' TO ER-MESSAGE PERFORM WRITE-ERROR ELSE IF PI-EXPIRY-DATE < PI-EFFECTIVE-DATE MOVE 'E004' TO ER-CODE MOVE 'EXPIRY DATE BEFORE EFFECTIVE DATE' TO ER-MESSAGE PERFORM WRITE-ERROR ELSE PERFORM CALCULATE-EARNED END-IF END-IF END-IF END-IF.",
+            "MOVE 'N' TO WS-DATE-VALID IF WS-DATE-IN NUMERIC MOVE WS-DATE-IN(1:4) TO WS-YEAR MOVE WS-DATE-IN(5:2) TO WS-MONTH MOVE WS-DATE-IN(7:2) TO WS-DAY IF WS-YEAR > ZERO AND WS-MONTH >= 1 AND WS-MONTH <= 12 PERFORM SET-MAX-DAY IF WS-DAY >= 1 AND WS-DAY <= WS-MAX-DAY MOVE 'Y' TO WS-DATE-VALID END-IF END-IF END-IF.",
+            "MOVE 31 TO WS-MAX-DAY WHEN 4 WHEN 6 WHEN 9 WHEN 11 MOVE 30 TO WS-MAX-DAY WHEN 2 PERFORM CHECK-LEAP-YEAR IF WS-LEAP = 'Y' MOVE 29 TO WS-MAX-DAY ELSE MOVE 28 TO WS-MAX-DAY END-IF END-EVALUATE.",
+            "MOVE 'N' TO WS-LEAP COMPUTE WS-REM4 = FUNCTION MOD(WS-YEAR, 4) COMPUTE WS-REM100 = FUNCTION MOD(WS-YEAR, 100) COMPUTE WS-REM400 = FUNCTION MOD(WS-YEAR, 400) IF WS-REM400 = ZERO MOVE 'Y' TO WS-LEAP ELSE IF WS-REM4 = ZERO AND WS-REM100 NOT = ZERO MOVE 'Y' TO WS-LEAP END-IF END-IF.",
+            "MOVE 'E005' TO ER-CODE MOVE 'POLICY TERM DAYS INVALID' TO ER-MESSAGE PERFORM WRITE-ERROR ELSE IF WS-CALC-INT < WS-EFF-INT MOVE ZERO TO WS-EARNED-DAYS ELSE IF WS-CALC-INT > WS-EXP-INT MOVE WS-TERM-DAYS TO WS-EARNED-DAYS ELSE COMPUTE WS-EARNED-DAYS = WS-CALC-INT - WS-EFF-INT + 1 END-IF END-IF COMPUTE WS-EARNED ROUNDED = PRI-WRITTEN-PREMIUM * WS-EARNED-DAYS / WS-TERM-DAYS IF WS-EARNED > PRI-WRITTEN-PREMIUM MOVE PRI-WRITTEN-PREMIUM TO WS-EARNED END-IF COMPUTE WS-UNEARNED = PRI-WRITTEN-PREMIUM - WS-EARNED IF WS-UNEARNED < ZERO MOVE ZERO TO WS-UNEARNED END-IF PERFORM WRITE-RESULT END-IF.",
+            "MOVE PRI-PREMIUM-ID TO PRO-PREMIUM-ID MOVE PRI-POLICY-NO TO PRO-POLICY-NO MOVE PRI-WRITTEN-PREMIUM TO PRO-WRITTEN-PREMIUM MOVE WS-EARNED TO PRO-EARNED-PREMIUM MOVE WS-UNEARNED TO PRO-UNEARNED-PREMIUM MOVE PRI-CALCULATION-DATE TO PRO-CALCULATION-DATE WRITE PRO-REC IF WS-PO-ST = '00' ADD 1 TO WS-CALCULATED ELSE DISPLAY 'PREMIUM OUTPUT WRITE ERROR ' WS-PO-ST ADD 1 TO WS-IO-ERRORS SET FATAL-ERROR TO TRUE END-IF.",
+            "MOVE PRI-POLICY-NO TO ER-POLICY-NO WRITE ER-REC IF WS-ER-ST = '00' ADD 1 TO WS-ERRORS ELSE DISPLAY 'ERROR OUTPUT WRITE ERROR ' WS-ER-ST ADD 1 TO WS-IO-ERRORS SET FATAL-ERROR TO TRUE END-IF."
+        ],
+        "open": [
+            "OPEN INPUT POLICY-IN PREMIUM-IN OUTPUT PREMIUM-OUT ERROR-OUT IF WS-PI-ST NOT = '00' DISPLAY 'POLICY OPEN ERROR ' WS-PI-ST SET FATAL-ERROR TO TRUE END-IF IF WS-PR-ST NOT = '00' DISPLAY 'PREMIUM OPEN ERROR ' WS-PR-ST SET FATAL-ERROR TO TRUE END-IF IF WS-PO-ST NOT = '00' DISPLAY 'OUTPUT OPEN ERROR ' WS-PO-ST SET FATAL-ERROR TO TRUE END-IF IF WS-ER-ST NOT = '00' DISPLAY 'ERROR FILE OPEN ERROR ' WS-ER-ST SET FATAL-ERROR TO TRUE END-IF."
+        ],
+        "close": [
+            "CLOSE POLICY-IN PREMIUM-IN PREMIUM-OUT ERROR-OUT."
+        ],
+        "display": [
+            "DISPLAY 'EARNPREM READ : ' WS-READ DISPLAY 'EARNPREM CALCULATED : ' WS-CALCULATED DISPLAY 'EARNPREM ERRORS : ' WS-ERRORS DISPLAY 'EARNPREM I/O ERRORS : ' WS-IO-ERRORS IF FATAL-ERROR MOVE 12 TO RETURN-CODE END-IF GOBACK.",
+            "DISPLAY 'POLICY OPEN ERROR ' WS-PI-ST SET FATAL-ERROR TO TRUE END-IF IF WS-PR-ST NOT = '00' DISPLAY 'PREMIUM OPEN ERROR ' WS-PR-ST SET FATAL-ERROR TO TRUE END-IF IF WS-PO-ST NOT = '00' DISPLAY 'OUTPUT OPEN ERROR ' WS-PO-ST SET FATAL-ERROR TO TRUE END-IF IF WS-ER-ST NOT = '00' DISPLAY 'ERROR FILE OPEN ERROR ' WS-ER-ST SET FATAL-ERROR TO TRUE END-IF.",
+            "DISPLAY 'POLICY READ ERROR ' WS-PI-ST ADD 1 TO WS-IO-ERRORS SET FATAL-ERROR TO TRUE ELSE IF WS-PREV-POLICY NOT = LOW-VALUES AND PI-POLICY-NO < WS-PREV-POLICY DISPLAY 'POLICY INPUT OUT OF ORDER: ' PI-POLICY-NO ADD 1 TO WS-IO-ERRORS SET FATAL-ERROR TO TRUE ELSE MOVE PI-POLICY-NO TO WS-PREV-POLICY END-IF END-IF END-READ END-IF.",
+            "DISPLAY 'PREMIUM READ ERROR ' WS-PR-ST ADD 1 TO WS-IO-ERRORS SET FATAL-ERROR TO TRUE ELSE IF WS-PREV-PREMIUM-POLICY NOT = LOW-VALUES AND PRI-POLICY-NO < WS-PREV-PREMIUM-POLICY DISPLAY 'PREMIUM INPUT OUT OF ORDER: ' PRI-POLICY-NO ADD 1 TO WS-IO-ERRORS SET FATAL-ERROR TO TRUE ELSE MOVE PRI-POLICY-NO TO WS-PREV-PREMIUM-POLICY END-IF END-IF END-READ END-IF.",
+            "DISPLAY 'PREMIUM OUTPUT WRITE ERROR ' WS-PO-ST ADD 1 TO WS-IO-ERRORS SET FATAL-ERROR TO TRUE END-IF.",
+            "DISPLAY 'ERROR OUTPUT WRITE ERROR ' WS-ER-ST ADD 1 TO WS-IO-ERRORS SET FATAL-ERROR TO TRUE END-IF."
+        ],
+        "if": [
+            "IF FATAL-ERROR GOBACK END-IF PERFORM READ-POLICY PERFORM UNTIL PREM-EOF OR FATAL-ERROR PERFORM READ-PREMIUM IF NOT PREM-EOF AND NOT FATAL-ERROR ADD 1 TO WS-READ PERFORM PROCESS-PREMIUM END-IF END-PERFORM PERFORM CLOSE-FILES DISPLAY 'EARNPREM READ : ' WS-READ DISPLAY 'EARNPREM CALCULATED : ' WS-CALCULATED DISPLAY 'EARNPREM ERRORS : ' WS-ERRORS DISPLAY 'EARNPREM I/O ERRORS : ' WS-IO-ERRORS IF FATAL-ERROR MOVE 12 TO RETURN-CODE END-IF GOBACK.",
+            "IF WS-PI-ST NOT = '00' DISPLAY 'POLICY OPEN ERROR ' WS-PI-ST SET FATAL-ERROR TO TRUE END-IF IF WS-PR-ST NOT = '00' DISPLAY 'PREMIUM OPEN ERROR ' WS-PR-ST SET FATAL-ERROR TO TRUE END-IF IF WS-PO-ST NOT = '00' DISPLAY 'OUTPUT OPEN ERROR ' WS-PO-ST SET FATAL-ERROR TO TRUE END-IF IF WS-ER-ST NOT = '00' DISPLAY 'ERROR FILE OPEN ERROR ' WS-ER-ST SET FATAL-ERROR TO TRUE END-IF.",
+            "IF NOT POL-EOF READ POLICY-IN AT END MOVE 'Y' TO WS-POL-EOF NOT AT END IF WS-PI-ST NOT = '00' DISPLAY 'POLICY READ ERROR ' WS-PI-ST ADD 1 TO WS-IO-ERRORS SET FATAL-ERROR TO TRUE ELSE IF WS-PREV-POLICY NOT = LOW-VALUES AND PI-POLICY-NO < WS-PREV-POLICY DISPLAY 'POLICY INPUT OUT OF ORDER: ' PI-POLICY-NO ADD 1 TO WS-IO-ERRORS SET FATAL-ERROR TO TRUE ELSE MOVE PI-POLICY-NO TO WS-PREV-POLICY END-IF END-IF END-READ END-IF.",
+            "IF NOT PREM-EOF READ PREMIUM-IN AT END MOVE 'Y' TO WS-PREM-EOF NOT AT END IF WS-PR-ST NOT = '00' DISPLAY 'PREMIUM READ ERROR ' WS-PR-ST ADD 1 TO WS-IO-ERRORS SET FATAL-ERROR TO TRUE ELSE IF WS-PREV-PREMIUM-POLICY NOT = LOW-VALUES AND PRI-POLICY-NO < WS-PREV-PREMIUM-POLICY DISPLAY 'PREMIUM INPUT OUT OF ORDER: ' PRI-POLICY-NO ADD 1 TO WS-IO-ERRORS SET FATAL-ERROR TO TRUE ELSE MOVE PRI-POLICY-NO TO WS-PREV-PREMIUM-POLICY END-IF END-IF END-READ END-IF.",
+            "IF WS-POL-FOUND = 'Y' PERFORM VALIDATE-DATES ELSE MOVE 'E001' TO ER-CODE MOVE 'POLICY NOT FOUND FOR PREMIUM RECORD' TO ER-MESSAGE PERFORM WRITE-ERROR END-IF.",
+            "IF PI-POLICY-NO < PRI-POLICY-NO PERFORM READ-POLICY ELSE IF PI-POLICY-NO = PRI-POLICY-NO MOVE 'Y' TO WS-POL-FOUND END-IF EXIT PERFORM END-IF END-PERFORM.",
+            "IF WS-DATE-VALID NOT = 'Y' MOVE 'E002' TO ER-CODE MOVE 'INVALID POLICY EFFECTIVE DATE' TO ER-MESSAGE PERFORM WRITE-ERROR ELSE MOVE PI-EXPIRY-DATE TO WS-DATE-IN PERFORM VALIDATE-CALENDAR-DATE IF WS-DATE-VALID NOT = 'Y' MOVE 'E003' TO ER-CODE MOVE 'INVALID POLICY EXPIRY DATE' TO ER-MESSAGE PERFORM WRITE-ERROR ELSE MOVE PRI-CALCULATION-DATE TO WS-DATE-IN PERFORM VALIDATE-CALENDAR-DATE IF WS-DATE-VALID NOT = 'Y' MOVE 'E006' TO ER-CODE MOVE 'INVALID PREMIUM CALCULATION DATE' TO ER-MESSAGE PERFORM WRITE-ERROR ELSE IF PI-EXPIRY-DATE < PI-EFFECTIVE-DATE MOVE 'E004' TO ER-CODE MOVE 'EXPIRY DATE BEFORE EFFECTIVE DATE' TO ER-MESSAGE PERFORM WRITE-ERROR ELSE PERFORM CALCULATE-EARNED END-IF END-IF END-IF END-IF.",
+            "IF WS-DATE-IN NUMERIC MOVE WS-DATE-IN(1:4) TO WS-YEAR MOVE WS-DATE-IN(5:2) TO WS-MONTH MOVE WS-DATE-IN(7:2) TO WS-DAY IF WS-YEAR > ZERO AND WS-MONTH >= 1 AND WS-MONTH <= 12 PERFORM SET-MAX-DAY IF WS-DAY >= 1 AND WS-DAY <= WS-MAX-DAY MOVE 'Y' TO WS-DATE-VALID END-IF END-IF END-IF.",
+            "IF WS-LEAP = 'Y' MOVE 29 TO WS-MAX-DAY ELSE MOVE 28 TO WS-MAX-DAY END-IF END-EVALUATE.",
+            "IF WS-REM400 = ZERO MOVE 'Y' TO WS-LEAP ELSE IF WS-REM4 = ZERO AND WS-REM100 NOT = ZERO MOVE 'Y' TO WS-LEAP END-IF END-IF.",
+            "IF WS-TERM-DAYS <= ZERO MOVE 'E005' TO ER-CODE MOVE 'POLICY TERM DAYS INVALID' TO ER-MESSAGE PERFORM WRITE-ERROR ELSE IF WS-CALC-INT < WS-EFF-INT MOVE ZERO TO WS-EARNED-DAYS ELSE IF WS-CALC-INT > WS-EXP-INT MOVE WS-TERM-DAYS TO WS-EARNED-DAYS ELSE COMPUTE WS-EARNED-DAYS = WS-CALC-INT - WS-EFF-INT + 1 END-IF END-IF COMPUTE WS-EARNED ROUNDED = PRI-WRITTEN-PREMIUM * WS-EARNED-DAYS / WS-TERM-DAYS IF WS-EARNED > PRI-WRITTEN-PREMIUM MOVE PRI-WRITTEN-PREMIUM TO WS-EARNED END-IF COMPUTE WS-UNEARNED = PRI-WRITTEN-PREMIUM - WS-EARNED IF WS-UNEARNED < ZERO MOVE ZERO TO WS-UNEARNED END-IF PERFORM WRITE-RESULT END-IF.",
+            "IF WS-PO-ST = '00' ADD 1 TO WS-CALCULATED ELSE DISPLAY 'PREMIUM OUTPUT WRITE ERROR ' WS-PO-ST ADD 1 TO WS-IO-ERRORS SET FATAL-ERROR TO TRUE END-IF.",
+            "IF WS-ER-ST = '00' ADD 1 TO WS-ERRORS ELSE DISPLAY 'ERROR OUTPUT WRITE ERROR ' WS-ER-ST ADD 1 TO WS-IO-ERRORS SET FATAL-ERROR TO TRUE END-IF."
+        ],
+        "goto": [],
+        "add": [
+            "ADD THEM WHEN APPROVED RULES ARE PROVIDED.",
+            "ADD 1 TO WS-READ PERFORM PROCESS-PREMIUM END-IF END-PERFORM PERFORM CLOSE-FILES DISPLAY 'EARNPREM READ : ' WS-READ DISPLAY 'EARNPREM CALCULATED : ' WS-CALCULATED DISPLAY 'EARNPREM ERRORS : ' WS-ERRORS DISPLAY 'EARNPREM I/O ERRORS : ' WS-IO-ERRORS IF FATAL-ERROR MOVE 12 TO RETURN-CODE END-IF GOBACK.",
+            "ADD 1 TO WS-IO-ERRORS SET FATAL-ERROR TO TRUE ELSE IF WS-PREV-POLICY NOT = LOW-VALUES AND PI-POLICY-NO < WS-PREV-POLICY DISPLAY 'POLICY INPUT OUT OF ORDER: ' PI-POLICY-NO ADD 1 TO WS-IO-ERRORS SET FATAL-ERROR TO TRUE ELSE MOVE PI-POLICY-NO TO WS-PREV-POLICY END-IF END-IF END-READ END-IF.",
+            "ADD 1 TO WS-IO-ERRORS SET FATAL-ERROR TO TRUE ELSE IF WS-PREV-PREMIUM-POLICY NOT = LOW-VALUES AND PRI-POLICY-NO < WS-PREV-PREMIUM-POLICY DISPLAY 'PREMIUM INPUT OUT OF ORDER: ' PRI-POLICY-NO ADD 1 TO WS-IO-ERRORS SET FATAL-ERROR TO TRUE ELSE MOVE PRI-POLICY-NO TO WS-PREV-PREMIUM-POLICY END-IF END-IF END-READ END-IF.",
+            "ADD 1 TO WS-CALCULATED ELSE DISPLAY 'PREMIUM OUTPUT WRITE ERROR ' WS-PO-ST ADD 1 TO WS-IO-ERRORS SET FATAL-ERROR TO TRUE END-IF.",
+            "ADD 1 TO WS-ERRORS ELSE DISPLAY 'ERROR OUTPUT WRITE ERROR ' WS-ER-ST ADD 1 TO WS-IO-ERRORS SET FATAL-ERROR TO TRUE END-IF."
+        ]
+    },
+    "performs": [
+        "OPEN-FILES",
+        "READ-POLICY",
+        "UNTIL",
+        "READ-PREMIUM",
+        "PROCESS-PREMIUM",
+        "PERFORM",
+        "FIND-POLICY",
+        "VALIDATE-DATES",
+        "WRITE-ERROR",
+        "END-IF",
+        "VALIDATE-CALENDAR-DATE",
+        "CALCULATE-EARNED",
+        "SET-MAX-DAY",
+        "CHECK-LEAP-YEAR",
+        "WRITE-RESULT"
+    ],
+    "calls": [],
+    "sql_statements": [],
+    "cics_statements": [],
+    "database_tables": [],
+    "database_columns": [],
+    "file_operations": [
+        {
+            "operation": "READ",
+            "file": "PIC"
+        },
+        {
+            "operation": "READ",
+            "file": "PERFORM"
+        },
+        {
+            "operation": "READ",
+            "file": "DISPLAY"
+        },
+        {
+            "operation": "READ",
+            "file": "POLICY-IN"
+        },
+        {
+            "operation": "READ",
+            "file": "ERROR"
+        },
+        {
+            "operation": "READ",
+            "file": "END-IF"
+        },
+        {
+            "operation": "READ",
+            "file": "PREMIUM-IN"
+        },
+        {
+            "operation": "READ",
+            "file": "ERROR"
+        },
+        {
+            "operation": "READ",
+            "file": "END-IF"
+        },
+        {
+            "operation": "WRITE",
+            "file": "PRO-REC"
+        },
+        {
+            "operation": "WRITE",
+            "file": "ERROR"
+        },
+        {
+            "operation": "WRITE",
+            "file": "ER-REC"
+        },
+        {
+            "operation": "WRITE",
+            "file": "ERROR"
+        },
+        {
+            "operation": "CLOSE",
+            "file": "POLICY-IN"
+        },
+        {
+            "operation": "OPEN",
+            "file": "POLICY-IN"
+        },
+        {
+            "operation": "OPEN",
+            "file": "ERROR"
+        },
+        {
+            "operation": "OPEN",
+            "file": "ERROR"
+        },
+        {
+            "operation": "OPEN",
+            "file": "ERROR"
+        },
+        {
+            "operation": "OPEN",
+            "file": "ERROR"
+        }
+    ],
+    "moves": [
+        {
+            "source": "12",
+            "target": "RETURN-CODE"
+        },
+        {
+            "source": "'Y'",
+            "target": "WS-POL-EOF"
+        },
+        {
+            "source": "PI-POLICY-NO",
+            "target": "WS-PREV-POLICY"
+        },
+        {
+            "source": "'Y'",
+            "target": "WS-PREM-EOF"
+        },
+        {
+            "source": "PRI-POLICY-NO",
+            "target": "WS-PREV-PREMIUM-POLICY"
+        },
+        {
+            "source": "'N'",
+            "target": "WS-POL-FOUND"
+        },
+        {
+            "source": "'E001'",
+            "target": "ER-CODE"
+        },
+        {
+            "source": "'POLICY NOT FOUND FOR PREMIUM RECORD'",
+            "target": "ER-MESSAGE"
+        },
+        {
+            "source": "'Y'",
+            "target": "WS-POL-FOUND"
+        },
+        {
+            "source": "PI-EFFECTIVE-DATE",
+            "target": "WS-DATE-IN"
+        },
+        {
+            "source": "'E002'",
+            "target": "ER-CODE"
+        },
+        {
+            "source": "'INVALID POLICY EFFECTIVE DATE'",
+            "target": "ER-MESSAGE"
+        },
+        {
+            "source": "PI-EXPIRY-DATE",
+            "target": "WS-DATE-IN"
+        },
+        {
+            "source": "'E003'",
+            "target": "ER-CODE"
+        },
+        {
+            "source": "'INVALID POLICY EXPIRY DATE'",
+            "target": "ER-MESSAGE"
+        },
+        {
+            "source": "PRI-CALCULATION-DATE",
+            "target": "WS-DATE-IN"
+        },
+        {
+            "source": "'E006'",
+            "target": "ER-CODE"
+        },
+        {
+            "source": "'INVALID PREMIUM CALCULATION DATE'",
+            "target": "ER-MESSAGE"
+        },
+        {
+            "source": "'E004'",
+            "target": "ER-CODE"
+        },
+        {
+            "source": "'EXPIRY DATE BEFORE EFFECTIVE DATE'",
+            "target": "ER-MESSAGE"
+        },
+        {
+            "source": "'N'",
+            "target": "WS-DATE-VALID"
+        },
+        {
+            "source": "WS-DATE-IN(1:4)",
+            "target": "WS-YEAR"
+        },
+        {
+            "source": "WS-DATE-IN(5:2)",
+            "target": "WS-MONTH"
+        },
+        {
+            "source": "WS-DATE-IN(7:2)",
+            "target": "WS-DAY"
+        },
+        {
+            "source": "'Y'",
+            "target": "WS-DATE-VALID"
+        },
+        {
+            "source": "31",
+            "target": "WS-MAX-DAY"
+        },
+        {
+            "source": "30",
+            "target": "WS-MAX-DAY"
+        },
+        {
+            "source": "29",
+            "target": "WS-MAX-DAY"
+        },
+        {
+            "source": "28",
+            "target": "WS-MAX-DAY"
+        },
+        {
+            "source": "'N'",
+            "target": "WS-LEAP"
+        },
+        {
+            "source": "'Y'",
+            "target": "WS-LEAP"
+        },
+        {
+            "source": "'Y'",
+            "target": "WS-LEAP"
+        },
+        {
+            "source": "'E005'",
+            "target": "ER-CODE"
+        },
+        {
+            "source": "'POLICY TERM DAYS INVALID'",
+            "target": "ER-MESSAGE"
+        },
+        {
+            "source": "ZERO",
+            "target": "WS-EARNED-DAYS"
+        },
+        {
+            "source": "WS-TERM-DAYS",
+            "target": "WS-EARNED-DAYS"
+        },
+        {
+            "source": "PRI-WRITTEN-PREMIUM",
+            "target": "WS-EARNED"
+        },
+        {
+            "source": "ZERO",
+            "target": "WS-UNEARNED"
+        },
+        {
+            "source": "PRI-PREMIUM-ID",
+            "target": "PRO-PREMIUM-ID"
+        },
+        {
+            "source": "PRI-POLICY-NO",
+            "target": "PRO-POLICY-NO"
+        },
+        {
+            "source": "PRI-WRITTEN-PREMIUM",
+            "target": "PRO-WRITTEN-PREMIUM"
+        },
+        {
+            "source": "WS-EARNED",
+            "target": "PRO-EARNED-PREMIUM"
+        },
+        {
+            "source": "WS-UNEARNED",
+            "target": "PRO-UNEARNED-PREMIUM"
+        },
+        {
+            "source": "PRI-CALCULATION-DATE",
+            "target": "PRO-CALCULATION-DATE"
+        },
+        {
+            "source": "PRI-POLICY-NO",
+            "target": "ER-POLICY-NO"
+        }
+    ],
+    "conditions": [
+        "FATAL-ERROR GOBACK",
+        "PERFORM",
+        "NOT PREM-EOF AND NOT FATAL-ERROR",
+        "END-",
+        "FATAL-ERROR",
+        "GOBACK",
+        "WS-PI-ST NOT = '00'",
+        "IF WS-PR-ST NOT = '00'",
+        "IF WS-PO-ST NOT = '00'",
+        "IF WS-ER-ST NOT = '00'",
+        "NOT POL-EOF",
+        "WS-PREV-POLICY NOT = LOW-VALUES AND PI-POLICY-NO < WS-PREV-POLICY",
+        "END-IF END-",
+        "NOT PREM-EOF",
+        "WS-PR-ST NOT = '00'",
+        "WS-PREV-PREMIUM-POLICY NOT = LOW-VALUES AND PRI-POLICY-NO < WS-PREV-PREMIUM-POLICY",
+        "WS-POL-FOUND = 'Y'",
+        "PI-POLICY-NO < PRI-POLICY-NO",
+        "PI-POLICY-NO = PRI-POLICY-NO",
+        "EXIT",
+        "WS-DATE-VALID NOT = 'Y'",
+        "PI-EXPIRY-DATE < PI-EFFECTIVE-DATE",
+        "END-IF",
+        "WS-DATE-IN NUMERIC",
+        "WS-YEAR > ZERO AND WS-MONTH >= 1 AND WS-MONTH <= 12",
+        "WS-DAY >= 1 AND WS-DAY <= WS-MAX-DAY",
+        "WS-LEAP = 'Y'",
+        "END-EVALUATE",
+        "WS-REM400 = ZERO",
+        "WS-REM4 = ZERO AND WS-REM100 NOT = ZERO",
+        "WS-TERM-DAYS <= ZERO",
+        "WS-CALC-INT < WS-EFF-INT",
+        "WS-CALC-INT > WS-EXP-INT",
+        "WS-EARNED > PRI-WRITTEN-PREMIUM",
+        "COMPUTE WS-UNEARNED = PRI-WRITTEN-PREMIUM - WS-EARNED IF WS-UNEARNED < ZERO",
+        "WS-PO-ST = '00'",
+        "WS-ER-ST = '00'"
+    ],
+    "tree_sitter": {
+        "root_type": "start",
+        "has_error": false,
+        "node_count": 1682,
+        "error_count": 0,
+        "node_types": {
+            "start": 1,
+            "program_definition": 1,
+            "identification_division": 1,
+            ".": 115,
+            "program_name": 1,
+            "comment": 14,
+            "environment_division": 1,
+            "input_output_section": 1,
+            "select_statement": 4,
+            "WORD": 229,
+            "assign_clause": 4,
+            "qualified_word": 205,
+            "organization_clause": 4,
+            "SEQUENTIAL": 4,
+            "file_status_clause": 4,
+            "FILE": 4,
+            "data_division": 1,
+            "file_section": 1,
+            "file_description": 4,
+            "file_type": 4,
+            "FD": 4,
+            "file_description_entry": 4,
+            "file_description_clause": 4,
+            "record_clause": 4,
+            "integer": 44,
+            "record_description_list": 4,
+            "data_description": 69,
+            "level_number": 69,
+            "entry_name": 69,
+            "picture_clause": 56,
+            "picture_x": 24,
+            "picture_9": 32,
+            "working_storage_section": 1,
+            "value_clause": 18,
+            "value_item": 18,
+            "SPACE": 4,
+            "SPACES": 4,
+            "string": 56,
+            "LOW_VALUE": 4,
+            "LOW-VALUES": 4,
+            "ZERO": 24,
+            "procedure_division": 1,
+            "paragraph_header": 14,
+            "perform_statement_call_proc": 21,
+            "perform_procedure": 21,
+            "label": 21,
+            "if_header": 26,
+            "expr": 80,
+            "goback_statement": 2,
+            "END_IF": 33,
+            "perform_statement_loop": 3,
+            "perform_option": 2,
+            "OR": 2,
+            "NOT": 4,
+            "AND": 7,
+            "add_statement": 9,
+            "number": 40,
+            "arithmetic_x": 19,
+            "END_PERFORM": 2,
+            "display_statement": 14,
+            "move_statement": 45,
+            "period": 14,
+            "open_statement": 1,
+            "open_arg": 2,
+            "INPUT": 1,
+            "OUTPUT": 1,
+            "ne": 12,
+            "set_statement": 10,
+            "set_to_true_false": 10,
+            "read_statement": 2,
+            "at_end": 2,
+            "not_at_end": 2,
+            "else_if_header": 7,
+            "lt": 6,
+            "<": 6,
+            "else_header": 10,
+            "END_READ": 2,
+            "eq": 7,
+            "=": 17,
+            "exit_statement": 1,
+            "NUMERIC": 1,
+            "refmod": 3,
+            "(": 9,
+            ":": 3,
+            ")": 9,
+            "gt": 3,
+            ">": 3,
+            "ge": 2,
+            ">=": 2,
+            "le": 3,
+            "<=": 3,
+            "evaluate_header": 1,
+            "evaluate_subject": 1,
+            "when": 3,
+            "END_EVALUATE": 1,
+            "compute_statement": 10,
+            "function_": 6,
+            "func_args": 6,
+            "-": 3,
+            "+": 2,
+            "ROUNDED": 1,
+            "*": 1,
+            "/": 1,
+            "write_statement": 2,
+            "close_statement": 1,
+            "close_arg": 4
+        }
+    },
+    "relationships": [
+        {
+            "source": "EARNPREM.CBL",
+            "relationship": "READS",
+            "target": "PIC"
+        },
+        {
+            "source": "EARNPREM.CBL",
+            "relationship": "READS",
+            "target": "PERFORM"
+        },
+        {
+            "source": "EARNPREM.CBL",
+            "relationship": "READS",
+            "target": "POLICY-IN"
+        },
+        {
+            "source": "EARNPREM.CBL",
+            "relationship": "READS",
+            "target": "PREMIUM-IN"
+        },
+        {
+            "source": "EARNPREM.CBL",
+            "relationship": "WRITES",
+            "target": "PRO-REC"
+        },
+        {
+            "source": "EARNPREM.CBL",
+            "relationship": "WRITES",
+            "target": "ER-REC"
+        },
+        {
+            "source": "EARNPREM.CBL",
+            "relationship": "CONTAINS_RECORD",
+            "target": "PI-REC"
+        },
+        {
+            "source": "EARNPREM.CBL",
+            "relationship": "CONTAINS_RECORD",
+            "target": "PRI-REC"
+        },
+        {
+            "source": "EARNPREM.CBL",
+            "relationship": "CONTAINS_RECORD",
+            "target": "PRO-REC"
+        },
+        {
+            "source": "EARNPREM.CBL",
+            "relationship": "CONTAINS_RECORD",
+            "target": "ER-REC"
+        },
+        {
+            "source": "EARNPREM.CBL",
+            "relationship": "CONTAINS_RECORD",
+            "target": "WS-STATUS"
+        },
+        {
+            "source": "EARNPREM.CBL",
+            "relationship": "CONTAINS_RECORD",
+            "target": "WS-SW"
+        },
+        {
+            "source": "EARNPREM.CBL",
+            "relationship": "CONTAINS_RECORD",
+            "target": "WS-SEQUENCE"
+        },
+        {
+            "source": "EARNPREM.CBL",
+            "relationship": "CONTAINS_RECORD",
+            "target": "WS-DATE-WORK"
+        },
+        {
+            "source": "EARNPREM.CBL",
+            "relationship": "CONTAINS_RECORD",
+            "target": "WS-AMOUNTS"
+        },
+        {
+            "source": "EARNPREM.CBL",
+            "relationship": "CONTAINS_RECORD",
+            "target": "WS-COUNTERS"
+        },
+        {
+            "source": "EARNPREM.CBL",
+            "relationship": "PERFORMS",
+            "target": "OPEN-FILES"
+        },
+        {
+            "source": "EARNPREM.CBL",
+            "relationship": "PERFORMS",
+            "target": "READ-POLICY"
+        },
+        {
+            "source": "EARNPREM.CBL",
+            "relationship": "PERFORMS",
+            "target": "UNTIL"
+        },
+        {
+            "source": "EARNPREM.CBL",
+            "relationship": "PERFORMS",
+            "target": "READ-PREMIUM"
+        },
+        {
+            "source": "EARNPREM.CBL",
+            "relationship": "PERFORMS",
+            "target": "PROCESS-PREMIUM"
+        },
+        {
+            "source": "EARNPREM.CBL",
+            "relationship": "PERFORMS",
+            "target": "PERFORM"
+        },
+        {
+            "source": "EARNPREM.CBL",
+            "relationship": "PERFORMS",
+            "target": "FIND-POLICY"
+        },
+        {
+            "source": "EARNPREM.CBL",
+            "relationship": "PERFORMS",
+            "target": "VALIDATE-DATES"
+        },
+        {
+            "source": "EARNPREM.CBL",
+            "relationship": "PERFORMS",
+            "target": "WRITE-ERROR"
+        },
+        {
+            "source": "EARNPREM.CBL",
+            "relationship": "PERFORMS",
+            "target": "END-IF"
+        },
+        {
+            "source": "EARNPREM.CBL",
+            "relationship": "PERFORMS",
+            "target": "VALIDATE-CALENDAR-DATE"
+        },
+        {
+            "source": "EARNPREM.CBL",
+            "relationship": "PERFORMS",
+            "target": "CALCULATE-EARNED"
+        },
+        {
+            "source": "EARNPREM.CBL",
+            "relationship": "PERFORMS",
+            "target": "SET-MAX-DAY"
+        },
+        {
+            "source": "EARNPREM.CBL",
+            "relationship": "PERFORMS",
+            "target": "CHECK-LEAP-YEAR"
+        },
+        {
+            "source": "EARNPREM.CBL",
+            "relationship": "PERFORMS",
+            "target": "WRITE-RESULT"
+        }
+    ],
+    "parse_errors": []
+}

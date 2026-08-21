@@ -1,0 +1,430 @@
+{
+  "schema_version": "1.0",
+  "agent": {
+    "name": "knowledge_engineering_agent",
+    "version": "0.2.0",
+    "mode": "llm_enabled"
+  },
+  "source": {
+    "canonical_schema_version": "1.0",
+    "artifact_count": 1
+  },
+  "artifact_profiles": [
+    {
+      "artifact_id": "artifact:7064ed6ace6a4322",
+      "source_type": "sql",
+      "file_name": "ClaimCenter_CPP_Breakdown_metadata.json",
+      "purpose": "SQL transformation or query over relational tables",
+      "entity_counts": {
+        "ARTIFACT": 1,
+        "TABLE": 28
+      },
+      "relationship_counts": {
+        "USES": 28
+      },
+      "entity_count": 29,
+      "relationship_count": 28,
+      "evidence_count": 49,
+      "business_rule_count": 49,
+      "key_entities": [
+        {
+          "id": "entity:05fa9d4da3c446c3",
+          "type": "ARTIFACT",
+          "name": "ClaimCenter_CPP_Breakdown_metadata"
+        },
+        {
+          "id": "entity:080f9c06a8c54697",
+          "type": "TABLE",
+          "name": "vw_curr_cc_transactionlineitem"
+        },
+        {
+          "id": "entity:3e1d8d92e94bf852",
+          "type": "TABLE",
+          "name": "vw_curr_cc_transaction"
+        },
+        {
+          "id": "entity:be917cda2ebaff9b",
+          "type": "TABLE",
+          "name": "vw_curr_cc_transactionset"
+        },
+        {
+          "id": "entity:67eaac21f9af8fc0",
+          "type": "TABLE",
+          "name": "vw_curr_cc_claim"
+        },
+        {
+          "id": "entity:9ed0ec7b91e972dc",
+          "type": "TABLE",
+          "name": "vw_curr_cc_policy"
+        },
+        {
+          "id": "entity:ff1b4520eb97cd35",
+          "type": "TABLE",
+          "name": "vw_curr_cc_check"
+        },
+        {
+          "id": "entity:9f0a10a56de60cd4",
+          "type": "TABLE",
+          "name": "vw_curr_cc_reserveline"
+        },
+        {
+          "id": "entity:2cfe55becfef31cf",
+          "type": "TABLE",
+          "name": "vw_curr_cc_exposure"
+        },
+        {
+          "id": "entity:7203276c7c1c3f71",
+          "type": "TABLE",
+          "name": "vw_curr_cc_coverage"
+        },
+        {
+          "id": "entity:74f63a9e51a5b20b",
+          "type": "TABLE",
+          "name": "vw_curr_cc_contact"
+        },
+        {
+          "id": "entity:37244652301e828c",
+          "type": "TABLE",
+          "name": "vw_curr_cc_user"
+        },
+        {
+          "id": "entity:5e295c8ac85af982",
+          "type": "TABLE",
+          "name": "vw_curr_cc_riskunit"
+        },
+        {
+          "id": "entity:0b26822948b8cb6f",
+          "type": "TABLE",
+          "name": "vw_curr_cc_classcode"
+        },
+        {
+          "id": "entity:d504d57ff5e3e81b",
+          "type": "TABLE",
+          "name": "vw_curr_cctl_lobcode"
+        },
+        {
+          "id": "entity:7a101b0033b1b949",
+          "type": "TABLE",
+          "name": "vw_curr_cctl_policytype"
+        },
+        {
+          "id": "entity:32f90c6da9b2e4dc",
+          "type": "TABLE",
+          "name": "vw_curr_cctl_transaction"
+        },
+        {
+          "id": "entity:166df789dd344aa4",
+          "type": "TABLE",
+          "name": "vw_curr_cctl_losscause"
+        },
+        {
+          "id": "entity:a3daddbcc8fbb8b2",
+          "type": "TABLE",
+          "name": "vw_curr_cctl_transactionstatus"
+        },
+        {
+          "id": "entity:bf7cf7c2db331643",
+          "type": "TABLE",
+          "name": "vw_curr_cctl_costtype"
+        }
+      ],
+      "business_rules": [
+        "SQL business rule",
+        "SQL business rule",
+        "SQL business rule",
+        "SQL business rule",
+        "SQL business rule",
+        "SQL business rule",
+        "SQL business rule",
+        "SQL business rule",
+        "SQL business rule",
+        "SQL business rule",
+        "SQL business rule",
+        "SQL business rule",
+        "SQL business rule",
+        "SQL business rule",
+        "SQL business rule",
+        "SQL business rule",
+        "SQL business rule",
+        "SQL business rule",
+        "SQL business rule",
+        "SQL business rule"
+      ]
+    }
+  ],
+  "artifact_reviews": [
+    {
+      "artifact_id": "artifact:7064ed6ace6a4322",
+      "mode": "llm_pending",
+      "status": "LLM_REVIEW_PENDING",
+      "purpose": "SQL transformation or query over relational tables",
+      "summary": "LLM review could not be completed.",
+      "key_findings": [],
+      "dependencies": [],
+      "business_rules": [],
+      "semantic_gaps": [
+        "503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.', 'status': 'UNAVAILABLE'}}"
+      ],
+      "evidence_candidates": [],
+      "confidence": 0.0,
+      "needs_deeper_analysis": true,
+      "reason": "LLM provider was unavailable; retry the artifact review later."
+    }
+  ],
+  "reconciliation": {
+    "normalized_entity_groups": [
+      {
+        "entity_type": "ARTIFACT",
+        "normalized_name": "CLAIMCENTER_CPP_BREAKDOWN_METADATA",
+        "entity_ids": [
+          "entity:05fa9d4da3c446c3"
+        ]
+      },
+      {
+        "entity_type": "TABLE",
+        "normalized_name": "VW_CURR_CC_TRANSACTIONLINEITEM",
+        "entity_ids": [
+          "entity:080f9c06a8c54697"
+        ]
+      },
+      {
+        "entity_type": "TABLE",
+        "normalized_name": "VW_CURR_CC_TRANSACTION",
+        "entity_ids": [
+          "entity:3e1d8d92e94bf852"
+        ]
+      },
+      {
+        "entity_type": "TABLE",
+        "normalized_name": "VW_CURR_CC_TRANSACTIONSET",
+        "entity_ids": [
+          "entity:be917cda2ebaff9b"
+        ]
+      },
+      {
+        "entity_type": "TABLE",
+        "normalized_name": "VW_CURR_CC_CLAIM",
+        "entity_ids": [
+          "entity:67eaac21f9af8fc0"
+        ]
+      },
+      {
+        "entity_type": "TABLE",
+        "normalized_name": "VW_CURR_CC_POLICY",
+        "entity_ids": [
+          "entity:9ed0ec7b91e972dc"
+        ]
+      },
+      {
+        "entity_type": "TABLE",
+        "normalized_name": "VW_CURR_CC_CHECK",
+        "entity_ids": [
+          "entity:ff1b4520eb97cd35"
+        ]
+      },
+      {
+        "entity_type": "TABLE",
+        "normalized_name": "VW_CURR_CC_RESERVELINE",
+        "entity_ids": [
+          "entity:9f0a10a56de60cd4"
+        ]
+      },
+      {
+        "entity_type": "TABLE",
+        "normalized_name": "VW_CURR_CC_EXPOSURE",
+        "entity_ids": [
+          "entity:2cfe55becfef31cf"
+        ]
+      },
+      {
+        "entity_type": "TABLE",
+        "normalized_name": "VW_CURR_CC_COVERAGE",
+        "entity_ids": [
+          "entity:7203276c7c1c3f71"
+        ]
+      },
+      {
+        "entity_type": "TABLE",
+        "normalized_name": "VW_CURR_CC_CONTACT",
+        "entity_ids": [
+          "entity:74f63a9e51a5b20b"
+        ]
+      },
+      {
+        "entity_type": "TABLE",
+        "normalized_name": "VW_CURR_CC_USER",
+        "entity_ids": [
+          "entity:37244652301e828c"
+        ]
+      },
+      {
+        "entity_type": "TABLE",
+        "normalized_name": "VW_CURR_CC_RISKUNIT",
+        "entity_ids": [
+          "entity:5e295c8ac85af982"
+        ]
+      },
+      {
+        "entity_type": "TABLE",
+        "normalized_name": "VW_CURR_CC_CLASSCODE",
+        "entity_ids": [
+          "entity:0b26822948b8cb6f"
+        ]
+      },
+      {
+        "entity_type": "TABLE",
+        "normalized_name": "VW_CURR_CCTL_LOBCODE",
+        "entity_ids": [
+          "entity:d504d57ff5e3e81b"
+        ]
+      },
+      {
+        "entity_type": "TABLE",
+        "normalized_name": "VW_CURR_CCTL_POLICYTYPE",
+        "entity_ids": [
+          "entity:7a101b0033b1b949"
+        ]
+      },
+      {
+        "entity_type": "TABLE",
+        "normalized_name": "VW_CURR_CCTL_TRANSACTION",
+        "entity_ids": [
+          "entity:32f90c6da9b2e4dc"
+        ]
+      },
+      {
+        "entity_type": "TABLE",
+        "normalized_name": "VW_CURR_CCTL_LOSSCAUSE",
+        "entity_ids": [
+          "entity:166df789dd344aa4"
+        ]
+      },
+      {
+        "entity_type": "TABLE",
+        "normalized_name": "VW_CURR_CCTL_TRANSACTIONSTATUS",
+        "entity_ids": [
+          "entity:a3daddbcc8fbb8b2"
+        ]
+      },
+      {
+        "entity_type": "TABLE",
+        "normalized_name": "VW_CURR_CCTL_COSTTYPE",
+        "entity_ids": [
+          "entity:bf7cf7c2db331643"
+        ]
+      },
+      {
+        "entity_type": "TABLE",
+        "normalized_name": "VW_CURR_CCTL_COSTCATEGORY",
+        "entity_ids": [
+          "entity:be406669e4f948a8"
+        ]
+      },
+      {
+        "entity_type": "TABLE",
+        "normalized_name": "VW_CURR_CCTL_LINECATEGORY",
+        "entity_ids": [
+          "entity:0e4f43ac7d136409"
+        ]
+      },
+      {
+        "entity_type": "TABLE",
+        "normalized_name": "VW_CURR_CCTL_TRANSACTIONLIFECYCLESTATE",
+        "entity_ids": [
+          "entity:a3652cda7255e078"
+        ]
+      },
+      {
+        "entity_type": "TABLE",
+        "normalized_name": "VW_CURR_CCTL_RECOVERYCATEGORY",
+        "entity_ids": [
+          "entity:d8d4c57e056b41cf"
+        ]
+      },
+      {
+        "entity_type": "TABLE",
+        "normalized_name": "VW_CURR_CCTL_UNDERWRITINGCOMPANYTYPE",
+        "entity_ids": [
+          "entity:8cd32a4564db6fb7"
+        ]
+      },
+      {
+        "entity_type": "TABLE",
+        "normalized_name": "VW_CURR_CCTL_COVERAGESUBTYPE",
+        "entity_ids": [
+          "entity:c970eb4222b998a3"
+        ]
+      },
+      {
+        "entity_type": "TABLE",
+        "normalized_name": "VW_CURR_CCTL_COVERAGETYPE",
+        "entity_ids": [
+          "entity:a041a1da0e616476"
+        ]
+      },
+      {
+        "entity_type": "TABLE",
+        "normalized_name": "VW_CURR_CCTL_CHECKBATCHING",
+        "entity_ids": [
+          "entity:25540f85d74849d5"
+        ]
+      },
+      {
+        "entity_type": "TABLE",
+        "normalized_name": "VW_CURR_CCTL_PAYMENTTYPE",
+        "entity_ids": [
+          "entity:d48a936d63b8392f"
+        ]
+      }
+    ],
+    "duplicate_groups": [],
+    "reference_matches": [],
+    "summary": {
+      "normalized_groups": 29,
+      "duplicate_groups": 0,
+      "reference_matches": 0
+    }
+  },
+  "evidence_validation": {
+    "artifact_assessments": [
+      {
+        "artifact_id": "artifact:7064ed6ace6a4322",
+        "confidence": 0.9,
+        "confidence_level": "HIGH",
+        "evidence_count": 49,
+        "entities_with_direct_evidence": 0,
+        "relationships_with_direct_evidence": 0,
+        "business_rules_with_direct_evidence": 49,
+        "validation_notes": [
+          "Business rules are present and should retain source evidence during enrichment."
+        ]
+      }
+    ],
+    "summary": {
+      "artifacts": 1,
+      "high_confidence": 1,
+      "medium_confidence": 0,
+      "low_confidence": 0
+    }
+  },
+  "knowledge_gaps": [
+    {
+      "artifact_id": "artifact:7064ed6ace6a4322",
+      "type": "DEEPER_ANALYSIS",
+      "reason": "LLM provider was unavailable; retry the artifact review later."
+    },
+    {
+      "artifact_id": "artifact:7064ed6ace6a4322",
+      "type": "LLM_REVIEW_PENDING",
+      "reason": "LLM provider unavailable; review is pending retry."
+    }
+  ],
+  "summary": {
+    "profiles": 1,
+    "reviews": 1,
+    "knowledge_gaps": 2,
+    "llm_reviews_completed": 0,
+    "llm_reviews_pending": 1,
+    "deeper_analysis_required": 1
+  }
+}

@@ -9,6 +9,7 @@ from typing import Any, Dict, Protocol
 from .canonical_metadata import build_canonical_metadata
 from .evidence import assess_evidence
 from .identification import identify_artifacts
+from .knowledge_graph import KnowledgeGraphAgent
 from .parser_executor import execute_parser
 from .parser_registry import select_parsers
 from .profile import build_artifact_profiles
@@ -23,12 +24,13 @@ class ArtifactReviewer(Protocol):
 class KnowledgeEngineeringAgent:
     """Orchestrate the complete knowledge-engineering control flow."""
 
-    VERSION = "0.8.0"
+    VERSION = "0.9.0"
 
     def __init__(self, reviewer: ArtifactReviewer | None = None, *, execute_parsers: bool = False, project_root: Path | None = None) -> None:
         self.reviewer = reviewer
         self.execute_parsers = execute_parsers
         self.project_root = project_root or Path(__file__).resolve().parents[1]
+        self.knowledge_graph_agent = KnowledgeGraphAgent()
 
     def run(self, canonical: Dict[str, Any]) -> Dict[str, Any]:
         artifacts = canonical.get("artifacts", [])
@@ -95,6 +97,8 @@ class KnowledgeEngineeringAgent:
         if relationship_discovery.get("summary", {}).get("unverified", 0):
             gaps.append({"type": "RELATIONSHIP_DISCOVERY", "reason": "Some discovered relationships require downstream validation.", "count": relationship_discovery["summary"]["unverified"]})
 
+        knowledge_graph = self.knowledge_graph_agent.run(canonical_metadata, relationship_discovery)
+
         parser_counts: dict[str, int] = {}
         for selection in parser_selections:
             parser_name = selection.get("parser") or "UNSUPPORTED"
@@ -105,8 +109,8 @@ class KnowledgeEngineeringAgent:
             execution_counts[status] = execution_counts.get(status, 0) + 1
 
         return {
-            "schema_version": "1.3",
-            "agent": {"name": "knowledge_engineering_agent", "version": self.VERSION, "mode": "llm_enabled" if self.reviewer else "deterministic_baseline", "stages": ["artifact_identification", "parser_selection", "parser_execution", "deterministic_profile", "llm_review", "evidence_validation", "reconciliation", "canonical_metadata", "relationship_discovery", "knowledge_gap_detection"]},
+            "schema_version": "1.4",
+            "agent": {"name": "knowledge_engineering_agent", "version": self.VERSION, "mode": "llm_enabled" if self.reviewer else "deterministic_baseline", "stages": ["artifact_identification", "parser_selection", "parser_execution", "deterministic_profile", "llm_review", "evidence_validation", "reconciliation", "canonical_metadata", "relationship_discovery", "knowledge_graph", "knowledge_gap_detection"]},
             "source": {"canonical_schema_version": canonical.get("schema_version", "1.0"), "artifact_count": len(artifacts)},
             "artifact_identification": {"total": len(identifications), "identified": sum(item["status"] == "IDENTIFIED" for item in identifications), "incomplete": sum(item["status"] != "IDENTIFIED" for item in identifications), "items": identifications},
             "parser_selection": {"total": len(parser_selections), "selected": sum(item["status"] == "SELECTED" for item in parser_selections), "unsupported": sum(item["status"] == "UNSUPPORTED" for item in parser_selections), "by_parser": parser_counts, "items": parser_selections},
@@ -117,8 +121,9 @@ class KnowledgeEngineeringAgent:
             "reconciliation": reconciliation,
             "canonical_metadata": canonical_metadata,
             "relationship_discovery": relationship_discovery,
+            "knowledge_graph": knowledge_graph,
             "knowledge_gaps": gaps,
-            "summary": {"profiles": len(profiles), "reviews": len(reviews), "knowledge_gaps": len(gaps), "artifacts_identified": sum(item["status"] == "IDENTIFIED" for item in identifications), "parsers_selected": sum(item["status"] == "SELECTED" for item in parser_selections), "parsers_unsupported": sum(item["status"] == "UNSUPPORTED" for item in parser_selections), "parser_executions": len(parser_executions), "parser_executions_successful": sum(item.get("status") == "EXECUTED" for item in parser_executions), "parser_executions_failed": sum(item.get("status") in {"FAILED", "TIMEOUT", "EXECUTION_ERROR"} for item in parser_executions), "llm_reviews_completed": sum(item.get("status") == "LLM_REVIEWED" for item in reviews), "llm_reviews_pending": sum(item.get("status") == "LLM_REVIEW_PENDING" for item in reviews), "deeper_analysis_required": sum(item.get("type") == "DEEPER_ANALYSIS" for item in gaps), "reconciliation_claims_assessed": reconciliation.get("summary", {}).get("claims_assessed", 0), "reconciliation_claims_supported": reconciliation.get("summary", {}).get("claims_supported", 0), "reconciliation_claims_unverified": reconciliation.get("summary", {}).get("claims_unverified", 0), "reconciliation_potential_conflicts": reconciliation.get("summary", {}).get("potential_conflicts", 0), "canonical_metadata_artifacts": canonical_metadata.get("statistics", {}).get("artifacts", 0), "relationships_discovered": relationship_discovery.get("summary", {}).get("relationships_discovered", 0), "relationships_supported": relationship_discovery.get("summary", {}).get("supported", 0), "relationships_unverified": relationship_discovery.get("summary", {}).get("unverified", 0), "relationship_conflicts": relationship_discovery.get("summary", {}).get("conflicts", 0)}
+            "summary": {"profiles": len(profiles), "reviews": len(reviews), "knowledge_gaps": len(gaps), "artifacts_identified": sum(item["status"] == "IDENTIFIED" for item in identifications), "parsers_selected": sum(item["status"] == "SELECTED" for item in parser_selections), "parsers_unsupported": sum(item["status"] == "UNSUPPORTED" for item in parser_selections), "parser_executions": len(parser_executions), "parser_executions_successful": sum(item.get("status") == "EXECUTED" for item in parser_executions), "parser_executions_failed": sum(item.get("status") in {"FAILED", "TIMEOUT", "EXECUTION_ERROR"} for item in parser_executions), "llm_reviews_completed": sum(item.get("status") == "LLM_REVIEWED" for item in reviews), "llm_reviews_pending": sum(item.get("status") == "LLM_REVIEW_PENDING" for item in reviews), "deeper_analysis_required": sum(item.get("type") == "DEEPER_ANALYSIS" for item in gaps), "reconciliation_claims_assessed": reconciliation.get("summary", {}).get("claims_assessed", 0), "reconciliation_claims_supported": reconciliation.get("summary", {}).get("claims_supported", 0), "reconciliation_claims_unverified": reconciliation.get("summary", {}).get("claims_unverified", 0), "reconciliation_potential_conflicts": reconciliation.get("summary", {}).get("potential_conflicts", 0), "canonical_metadata_artifacts": canonical_metadata.get("statistics", {}).get("artifacts", 0), "relationships_discovered": relationship_discovery.get("summary", {}).get("relationships_discovered", 0), "relationships_supported": relationship_discovery.get("summary", {}).get("supported", 0), "relationships_unverified": relationship_discovery.get("summary", {}).get("unverified", 0), "relationship_conflicts": relationship_discovery.get("summary", {}).get("conflicts", 0), "knowledge_graph_nodes": knowledge_graph.get("statistics", {}).get("nodes", 0), "knowledge_graph_edges": knowledge_graph.get("statistics", {}).get("edges", 0), "knowledge_graph_supported_edges": knowledge_graph.get("statistics", {}).get("supported_edges", 0), "knowledge_graph_unverified_edges": knowledge_graph.get("statistics", {}).get("unverified_edges", 0), "knowledge_graph_conflict_edges": knowledge_graph.get("statistics", {}).get("conflict_edges", 0)}
         }
 
     @staticmethod

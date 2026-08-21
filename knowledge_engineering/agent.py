@@ -24,7 +24,7 @@ class ArtifactReviewer(Protocol):
 class KnowledgeEngineeringAgent:
     """Orchestrate the complete knowledge-engineering control flow."""
 
-    VERSION = "0.9.0"
+    VERSION = "1.0.0"
 
     def __init__(self, reviewer: ArtifactReviewer | None = None, *, execute_parsers: bool = False, project_root: Path | None = None) -> None:
         self.reviewer = reviewer
@@ -97,6 +97,9 @@ class KnowledgeEngineeringAgent:
         if relationship_discovery.get("summary", {}).get("unverified", 0):
             gaps.append({"type": "RELATIONSHIP_DISCOVERY", "reason": "Some discovered relationships require downstream validation.", "count": relationship_discovery["summary"]["unverified"]})
 
+        # The graph is built from the canonical metadata and the validated
+        # relationship-discovery payload produced immediately above. It is
+        # included in the same enrichment document for end-to-end consumers.
         knowledge_graph = self.knowledge_graph_agent.run(canonical_metadata, relationship_discovery)
 
         parser_counts: dict[str, int] = {}
@@ -109,7 +112,7 @@ class KnowledgeEngineeringAgent:
             execution_counts[status] = execution_counts.get(status, 0) + 1
 
         return {
-            "schema_version": "1.4",
+            "schema_version": "1.5",
             "agent": {"name": "knowledge_engineering_agent", "version": self.VERSION, "mode": "llm_enabled" if self.reviewer else "deterministic_baseline", "stages": ["artifact_identification", "parser_selection", "parser_execution", "deterministic_profile", "llm_review", "evidence_validation", "reconciliation", "canonical_metadata", "relationship_discovery", "knowledge_graph", "knowledge_gap_detection"]},
             "source": {"canonical_schema_version": canonical.get("schema_version", "1.0"), "artifact_count": len(artifacts)},
             "artifact_identification": {"total": len(identifications), "identified": sum(item["status"] == "IDENTIFIED" for item in identifications), "incomplete": sum(item["status"] != "IDENTIFIED" for item in identifications), "items": identifications},

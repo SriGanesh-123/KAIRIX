@@ -8,7 +8,8 @@ from pathlib import Path
 
 from .agent import KnowledgeEngineeringAgent, load_canonical
 from .enrichment_store import write_merged
-from .gemini_reviewer import GeminiArtifactReviewer
+from .llm.config import LLMConfig
+from .llm.factory import create_reviewer
 from .summary import write_artifact_summaries
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -18,7 +19,6 @@ SUMMARY_DIR = PROJECT_ROOT / "output" / "knowledge" / "summaries"
 
 
 def _load_dotenv(path: Path) -> None:
-    """Minimal .env loader so python-dotenv is not required."""
     if not path.exists():
         return
     for raw_line in path.read_text(encoding="utf-8").splitlines():
@@ -34,9 +34,9 @@ def _load_dotenv(path: Path) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run the Knowledge Engineering Agent")
-    parser.add_argument("--deterministic", action="store_true", help="Skip Gemini and run the deterministic baseline only.")
-    parser.add_argument("--execute-parsers", action="store_true", help="Execute selected existing parser modules through the agent orchestration layer.")
-    parser.add_argument("--limit", type=int, default=0, help="Review only the first N artifacts with Gemini (0 = all). Useful for testing free-tier limits.")
+    parser.add_argument("--deterministic", action="store_true", help="Skip LLM review and run deterministic baseline only.")
+    parser.add_argument("--execute-parsers", action="store_true", help="Execute selected existing parser modules.")
+    parser.add_argument("--limit", type=int, default=0, help="Review only the first N artifacts (0 = all).")
     args = parser.parse_args()
     if not CANONICAL_PATH.exists():
         raise SystemExit(f"Canonical metadata not found: {CANONICAL_PATH}")
@@ -50,13 +50,17 @@ def main() -> None:
         allowed = {item["id"] for item in canonical["artifacts"]}
         for key in ("entities", "relationships", "evidence", "business_rules"):
             canonical[key] = [item for item in canonical.get(key, []) if item.get("artifact_id") in allowed]
+
     reviewer = None
+    llm_label = "deterministic"
     if not args.deterministic:
-        api_key = os.getenv("GEMINI_API_KEY", "").strip()
-        if api_key:
-            reviewer = GeminiArtifactReviewer(api_key=api_key)
-        else:
-            print("GEMINI_API_KEY not found; using deterministic baseline.")
+        config = LLMConfig.from_env()
+        if config is None:
+            raise SystemExit("LLM configuration missing. Set LLM_PROVIDER, LLM_MODEL and LLM_API_KEY, or use --deterministic.")
+        reviewer = create_reviewer(config)
+        llm_label = f"{config.provider}/{config.model}"
+        print(f"LLM selected: {llm_label}", flush=True)
+
     result = KnowledgeEngineeringAgent(reviewer=reviewer, execute_parsers=args.execute_parsers, project_root=PROJECT_ROOT).run(canonical)
     merged = write_merged(ENRICHMENT_PATH, result)
     summary_paths = write_artifact_summaries(merged, SUMMARY_DIR)
@@ -65,6 +69,7 @@ def main() -> None:
     print("KNOWLEDGE ENGINEERING AGENT")
     print("=" * 72)
     print(f"Mode                  : {merged['agent']['mode']}")
+    print(f"LLM                   : {llm_label}")
     print(f"Artifact profiles     : {summary['profiles']}")
     print(f"Artifact reviews      : {summary['reviews']}")
     print(f"Parser executions     : {summary['parser_executions']}")

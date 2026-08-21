@@ -6,10 +6,10 @@ import argparse
 import os
 from pathlib import Path
 
-from .agent import KnowledgeEngineeringAgent, load_canonical, write_enrichment
+from .agent import KnowledgeEngineeringAgent, load_canonical
+from .enrichment_store import write_merged
 from .gemini_reviewer import GeminiArtifactReviewer
 from .summary import write_artifact_summaries
-
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 CANONICAL_PATH = PROJECT_ROOT / "output" / "knowledge" / "canonical_metadata.json"
@@ -34,30 +34,14 @@ def _load_dotenv(path: Path) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run the Knowledge Engineering Agent")
-    parser.add_argument(
-        "--deterministic",
-        action="store_true",
-        help="Skip Gemini and run the deterministic baseline only.",
-    )
-    parser.add_argument(
-        "--execute-parsers",
-        action="store_true",
-        help="Execute selected existing parser modules through the agent orchestration layer.",
-    )
-    parser.add_argument(
-        "--limit",
-        type=int,
-        default=0,
-        help="Review only the first N artifacts with Gemini (0 = all). Useful for testing free-tier limits.",
-    )
+    parser.add_argument("--deterministic", action="store_true", help="Skip Gemini and run the deterministic baseline only.")
+    parser.add_argument("--execute-parsers", action="store_true", help="Execute selected existing parser modules through the agent orchestration layer.")
+    parser.add_argument("--limit", type=int, default=0, help="Review only the first N artifacts with Gemini (0 = all). Useful for testing free-tier limits.")
     args = parser.parse_args()
-
     if not CANONICAL_PATH.exists():
         raise SystemExit(f"Canonical metadata not found: {CANONICAL_PATH}")
-
     _load_dotenv(PROJECT_ROOT / ".env")
     canonical = load_canonical(CANONICAL_PATH)
-
     if args.limit < 0:
         raise SystemExit("--limit must be >= 0")
     if args.limit:
@@ -65,10 +49,7 @@ def main() -> None:
         canonical["artifacts"] = canonical.get("artifacts", [])[: args.limit]
         allowed = {item["id"] for item in canonical["artifacts"]}
         for key in ("entities", "relationships", "evidence", "business_rules"):
-            canonical[key] = [
-                item for item in canonical.get(key, []) if item.get("artifact_id") in allowed
-            ]
-
+            canonical[key] = [item for item in canonical.get(key, []) if item.get("artifact_id") in allowed]
     reviewer = None
     if not args.deterministic:
         api_key = os.getenv("GEMINI_API_KEY", "").strip()
@@ -76,21 +57,14 @@ def main() -> None:
             reviewer = GeminiArtifactReviewer(api_key=api_key)
         else:
             print("GEMINI_API_KEY not found; using deterministic baseline.")
-
-    result = KnowledgeEngineeringAgent(
-        reviewer=reviewer,
-        execute_parsers=args.execute_parsers,
-        project_root=PROJECT_ROOT,
-    ).run(canonical)
-    write_enrichment(ENRICHMENT_PATH, result)
-
-    summary_paths = write_artifact_summaries(result, SUMMARY_DIR)
-
-    summary = result["summary"]
+    result = KnowledgeEngineeringAgent(reviewer=reviewer, execute_parsers=args.execute_parsers, project_root=PROJECT_ROOT).run(canonical)
+    merged = write_merged(ENRICHMENT_PATH, result)
+    summary_paths = write_artifact_summaries(merged, SUMMARY_DIR)
+    summary = merged["summary"]
     print("=" * 72)
     print("KNOWLEDGE ENGINEERING AGENT")
     print("=" * 72)
-    print(f"Mode                  : {result['agent']['mode']}")
+    print(f"Mode                  : {merged['agent']['mode']}")
     print(f"Artifact profiles     : {summary['profiles']}")
     print(f"Artifact reviews      : {summary['reviews']}")
     print(f"Parser executions     : {summary['parser_executions']}")

@@ -1,4 +1,4 @@
-"""Groq SDK adapter with bounded context and no provider fallback."""
+"""Groq SDK adapter with compact context and no provider fallback."""
 from __future__ import annotations
 
 import time
@@ -6,15 +6,13 @@ from typing import Any
 
 from groq import Groq
 
-from .reviewer import ArtifactReview, LLMReviewer, build_prompt, load_source
+from .reviewer import ArtifactReview, LLMReviewer, load_source
 
 
 class GroqReviewer(LLMReviewer):
     provider = "groq"
-
-    # Keep a large safety margin below the 8K TPM free/on-demand limit because
-    # the request includes both system instructions and the user prompt.
-    max_prompt_chars = 17000
+    # Target a conservative request size below the 8K TPM limit.
+    max_prompt_chars = 12000
 
     def __init__(self, api_key: str, model: str, max_retries: int = 1) -> None:
         self.api_key = api_key
@@ -22,34 +20,51 @@ class GroqReviewer(LLMReviewer):
         self.max_retries = max_retries
         self.client = Groq(api_key=api_key)
 
-    def _bounded_prompt(self, artifact: dict[str, Any], profile: dict[str, Any]) -> str:
-        source = load_source(artifact)
-        full_prompt = build_prompt(artifact, profile, source)
-        if len(full_prompt) <= self.max_prompt_chars:
-            return full_prompt
+    @staticmethod
+    def _compact_json(value: Any, max_chars: int) -> str:
+        import json
+        text = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+        return text if len(text) <= max_chars else text[:max_chars] + "...[truncated]"
 
-        marker = (
-            "\n\n[ORIGINAL SOURCE CONTEXT BOUNDED FOR MODEL LIMITS. "
-            "The omitted middle section must not be inferred.]\n\n"
-        )
-        remaining = self.max_prompt_chars - len(marker)
-        head_chars = int(remaining * 0.60)
-        tail_chars = remaining - head_chars
-        bounded_source = source[:head_chars] + marker + source[-tail_chars:]
-        return build_prompt(artifact, profile, bounded_source)
+    def _build_bounded_prompt(self, artifact: dict[str, Any], profile: dict[str, Any]) -> str:
+        source = load_source(artifact)
+        artifact_text = self._compact_json(artifact, 1800)
+        profile_text = self._compact_json(profile, 3000)
+        remaining = max(3000, self.max_prompt_chars - len(artifact_text) - len(profile_text) - 1400)
+        head = int(remaining * 0.70)
+        tail = remaining - head
+        if len(source) > remaining:
+            source = (
+                source[:head]
+                + "\n\n[ORIGINAL SOURCE MIDDLE OMITTED FOR MODEL LIMITS. Do not infer omitted text.]\n\n"
+                + source[-tail:]
+            )
+        return f"""You are the Artifact Review component of a legacy reverse-engineering Knowledge Engineering Agent.
+
+Review ONLY the supplied artifact metadata, deterministic profile, and source excerpt.
+Do not invent dependencies, business rules, or evidence. Put uncertain items in semantic_gaps.
+Return JSON with: purpose, summary, key_findings, dependencies, business_rules, semantic_gaps,
+evidence_candidates, confidence (0.0-1.0), needs_deeper_analysis, and reason.
+
+ARTIFACT METADATA:
+{artifact_text}
+
+DETERMINISTIC PROFILE:
+{profile_text}
+
+SOURCE EXCERPT:
+{source}
+"""
 
     def review(self, artifact: dict[str, Any], profile: dict[str, Any]) -> dict[str, Any]:
-        prompt = self._bounded_prompt(artifact, profile)
+        prompt = self._build_bounded_prompt(artifact, profile)
         last_error: Exception | None = None
         for attempt in range(self.max_retries + 1):
             try:
                 response = self.client.chat.completions.create(
                     model=self.model,
                     messages=[
-                        {
-                            "role": "system",
-                            "content": "Return only valid JSON matching the requested review fields.",
-                        },
+                        {"role": "system", "content": "Return only valid JSON matching the requested review fields."},
                         {"role": "user", "content": prompt},
                     ],
                     temperature=0.1,
@@ -65,6 +80,4 @@ class GroqReviewer(LLMReviewer):
                 last_error = exc
                 if attempt < self.max_retries:
                     time.sleep(2 ** attempt)
-        raise RuntimeError(
-            f"Groq review failed for {artifact.get('file_name', 'unknown')}: {last_error}"
-        )
+        raise RuntimeError(f"Groq review failed for {artifact.get('file_name', 'unknown')}: {last_error}")

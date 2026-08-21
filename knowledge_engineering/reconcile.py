@@ -53,29 +53,17 @@ def build_reconciliation(
     duplicates: list[dict[str, Any]] = []
     for (entity_type, name), items in groups.items():
         ids = [item["id"] for item in items if item.get("id")]
-        aliases.append(
-            {
-                "entity_type": entity_type,
-                "normalized_name": name,
-                "entity_ids": ids,
-            }
-        )
+        aliases.append({"entity_type": entity_type, "normalized_name": name, "entity_ids": ids})
         if len(ids) > 1:
-            duplicates.append(
-                {
-                    "entity_type": entity_type,
-                    "canonical_name": name,
-                    "entity_ids": ids,
-                    "status": "DUPLICATE_CANDIDATE",
-                }
-            )
+            duplicates.append({
+                "entity_type": entity_type,
+                "canonical_name": name,
+                "entity_ids": ids,
+                "status": "DUPLICATE_CANDIDATE",
+            })
 
     reference_matches = _match_references(document)
-    claim_assessments = _assess_llm_claims(
-        document,
-        review_by_artifact,
-        evidence_by_artifact,
-    )
+    claim_assessments = _assess_llm_claims(document, review_by_artifact, evidence_by_artifact)
 
     artifact_assessments: list[dict[str, Any]] = []
     for artifact in document.get("artifacts", []):
@@ -87,37 +75,25 @@ def build_reconciliation(
         evidence_confidence = _safe_float(evidence.get("confidence"), 0.0)
         unresolved = sum(item.get("status") == "UNVERIFIED" for item in claims)
         conflicts = sum(item.get("status") == "POTENTIAL_CONFLICT" for item in claims)
-        confidence = _reconciled_confidence(
-            llm_confidence,
-            evidence_confidence,
-            unresolved,
-            conflicts,
-        )
-        artifact_assessments.append(
-            {
-                "artifact_id": artifact_id,
-                "file_name": artifact.get("file_name"),
-                "status": "CONFLICT" if conflicts else ("PARTIAL" if unresolved else "RECONCILED"),
-                "llm_confidence": llm_confidence,
-                "evidence_confidence": evidence_confidence,
-                "reconciled_confidence": confidence,
-                "confidence_level": _level(confidence),
-                "supported_claims": sum(item.get("status") == "SUPPORTED" for item in claims),
-                "unverified_claims": unresolved,
-                "potential_conflicts": conflicts,
-                "claim_assessment_count": len(claims),
-            }
-        )
+        confidence = _reconciled_confidence(llm_confidence, evidence_confidence, unresolved, conflicts)
+        artifact_assessments.append({
+            "artifact_id": artifact_id,
+            "file_name": artifact.get("file_name"),
+            "status": "CONFLICT" if conflicts else ("PARTIAL" if unresolved else "RECONCILED"),
+            "llm_confidence": llm_confidence,
+            "evidence_confidence": evidence_confidence,
+            "reconciled_confidence": confidence,
+            "confidence_level": _level(confidence),
+            "supported_claims": sum(item.get("status") == "SUPPORTED" for item in claims),
+            "unverified_claims": unresolved,
+            "potential_conflicts": conflicts,
+            "claim_assessment_count": len(claims),
+        })
 
-    canonical_knowledge = _build_canonical_knowledge(
-        document,
-        artifact_assessments,
-        duplicates,
-        reference_matches,
-    )
+    canonical_knowledge = _build_canonical_knowledge(document, artifact_assessments, duplicates, reference_matches)
 
     return {
-        "schema_version": "2.0",
+        "schema_version": "2.1",
         "normalized_entity_groups": aliases,
         "duplicate_groups": duplicates,
         "reference_matches": reference_matches,
@@ -139,15 +115,10 @@ def build_reconciliation(
     }
 
 
-def _assess_llm_claims(
-    document: Dict[str, Any],
-    review_by_artifact: Dict[str, Dict[str, Any]],
-    evidence_by_artifact: Dict[str, Dict[str, Any]],
-) -> list[dict[str, Any]]:
+def _assess_llm_claims(document: Dict[str, Any], review_by_artifact: Dict[str, Dict[str, Any]], evidence_by_artifact: Dict[str, Dict[str, Any]]) -> list[dict[str, Any]]:
     entities_by_artifact: dict[str, list[str]] = defaultdict(list)
     relationships_by_artifact: dict[str, list[str]] = defaultdict(list)
     rules_by_artifact: dict[str, list[str]] = defaultdict(list)
-
     for item in document.get("entities", []):
         entities_by_artifact[item.get("artifact_id", "")].append(normalize_name(item.get("name", "")))
     for item in document.get("relationships", []):
@@ -167,40 +138,26 @@ def _assess_llm_claims(
             for value in values:
                 claim = _claim_text(value)
                 normalized_claim = normalize_name(claim)
-                status = _classify_claim(
-                    normalized_claim,
-                    entities_by_artifact.get(artifact_id, []),
-                    relationships_by_artifact.get(artifact_id, []),
-                    rules_by_artifact.get(artifact_id, []),
-                    source_evidence > 0,
-                )
-                assessments.append(
-                    {
-                        "artifact_id": artifact_id,
-                        "field": field,
-                        "claim": claim,
-                        "status": status,
-                        "evidence_count": source_evidence,
-                        "reason": _claim_reason(status, source_evidence),
-                    }
-                )
+                status = _classify_claim(normalized_claim, entities_by_artifact.get(artifact_id, []), relationships_by_artifact.get(artifact_id, []), rules_by_artifact.get(artifact_id, []), source_evidence > 0)
+                claim_confidence = {"SUPPORTED": 0.90, "POTENTIAL_CONFLICT": 0.20, "UNVERIFIED": 0.40}.get(status, 0.0)
+                assessments.append({
+                    "artifact_id": artifact_id,
+                    "field": field,
+                    "claim": claim,
+                    "status": status,
+                    "claim_confidence": claim_confidence,
+                    "evidence_count": source_evidence,
+                    "reason": _claim_reason(status, source_evidence),
+                })
     return assessments
 
 
-def _classify_claim(
-    claim: str,
-    entity_names: list[str],
-    relationship_types: list[str],
-    rule_names: list[str],
-    has_source_evidence: bool,
-) -> str:
+def _classify_claim(claim: str, entity_names: list[str], relationship_types: list[str], rule_names: list[str], has_source_evidence: bool) -> str:
     if not claim:
         return "UNVERIFIED"
     known_terms = [term for term in (*entity_names, *relationship_types, *rule_names) if term]
     if any(len(term) >= 4 and term in claim for term in known_terms):
         return "SUPPORTED"
-    # A semantic LLM statement that has no deterministic match is not treated
-    # as a contradiction. It remains explicitly unresolved for later validation.
     if has_source_evidence:
         return "UNVERIFIED"
     return "UNVERIFIED"
@@ -214,42 +171,23 @@ def _claim_reason(status: str, evidence_count: int) -> str:
     return "No deterministic match or direct artifact evidence was found."
 
 
-def _build_canonical_knowledge(
-    document: Dict[str, Any],
-    artifact_assessments: list[dict[str, Any]],
-    duplicates: list[dict[str, Any]],
-    reference_matches: list[dict[str, Any]],
-) -> Dict[str, Any]:
-    confidence_by_artifact = {
-        item["artifact_id"]: item["reconciled_confidence"]
-        for item in artifact_assessments
-        if item.get("artifact_id")
-    }
+def _build_canonical_knowledge(document: Dict[str, Any], artifact_assessments: list[dict[str, Any]], duplicates: list[dict[str, Any]], reference_matches: list[dict[str, Any]]) -> Dict[str, Any]:
+    confidence_by_artifact = {item["artifact_id"]: item["reconciled_confidence"] for item in artifact_assessments if item.get("artifact_id")}
+
+    def canonical_fact(item: dict[str, Any]) -> dict[str, Any]:
+        """Preserve original deterministic confidence; never overwrite it."""
+        source_confidence = item.get("confidence")
+        result = dict(item)
+        result["reconciliation_status"] = "CANONICAL_FACT"
+        result["source_confidence"] = source_confidence
+        result["reconciled_confidence"] = confidence_by_artifact.get(item.get("artifact_id"), 0.0)
+        result["confidence_model"] = "source_confidence_preserved_plus_reconciliation_confidence"
+        return result
+
     return {
-        "entities": [
-            {
-                **entity,
-                "reconciliation_status": "CANONICAL_FACT",
-                "reconciled_confidence": confidence_by_artifact.get(entity.get("artifact_id"), 0.0),
-            }
-            for entity in document.get("entities", [])
-        ],
-        "relationships": [
-            {
-                **relationship,
-                "reconciliation_status": "CANONICAL_FACT",
-                "reconciled_confidence": confidence_by_artifact.get(relationship.get("artifact_id"), 0.0),
-            }
-            for relationship in document.get("relationships", [])
-        ],
-        "business_rules": [
-            {
-                **rule,
-                "reconciliation_status": "CANONICAL_FACT",
-                "reconciled_confidence": confidence_by_artifact.get(rule.get("artifact_id"), 0.0),
-            }
-            for rule in document.get("business_rules", [])
-        ],
+        "entities": [canonical_fact(entity) for entity in document.get("entities", [])],
+        "relationships": [canonical_fact(relationship) for relationship in document.get("relationships", [])],
+        "business_rules": [canonical_fact(rule) for rule in document.get("business_rules", [])],
         "duplicate_candidates": duplicates,
         "reference_matches": reference_matches,
     }
@@ -260,7 +198,6 @@ def _match_references(document: Dict[str, Any]) -> list[dict[str, Any]]:
     for entity in document.get("entities", []):
         if entity.get("entity_type") != "REFERENCE":
             by_name[normalize_name(entity.get("name", ""))].append(entity)
-
     matches = []
     for reference in document.get("entities", []):
         if reference.get("entity_type") != "REFERENCE":
@@ -268,14 +205,12 @@ def _match_references(document: Dict[str, Any]) -> list[dict[str, Any]]:
         key = normalize_name(reference.get("name", ""))
         candidates = by_name.get(key, [])
         if candidates:
-            matches.append(
-                {
-                    "reference_entity_id": reference["id"],
-                    "candidate_entity_ids": [item["id"] for item in candidates],
-                    "normalized_name": key,
-                    "confidence": 0.75 if len(candidates) == 1 else 0.55,
-                }
-            )
+            matches.append({
+                "reference_entity_id": reference["id"],
+                "candidate_entity_ids": [item["id"] for item in candidates],
+                "normalized_name": key,
+                "confidence": 0.75 if len(candidates) == 1 else 0.55,
+            })
     return matches
 
 
@@ -283,10 +218,7 @@ def _claim_text(value: Any) -> str:
     if isinstance(value, str):
         return value
     if isinstance(value, dict):
-        parts = []
-        for key, item in value.items():
-            parts.append(f"{key}: {item}")
-        return "; ".join(parts)
+        return "; ".join(f"{key}: {item}" for key, item in value.items())
     return str(value)
 
 

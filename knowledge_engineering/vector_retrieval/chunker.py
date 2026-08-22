@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
-from typing import Any, Dict, Iterable, List
+from typing import Any, Dict, List
+from uuid import NAMESPACE_URL, uuid5
 
 
 class KnowledgeChunker:
@@ -90,7 +90,7 @@ class KnowledgeChunker:
     @staticmethod
     def _chunk(kind: str, source_id: Any, artifact_id: Any, text: str, metadata: Dict[str, Any]) -> Dict[str, Any]:
         stable_key = f"{kind}|{artifact_id or ''}|{source_id or ''}|{text}"
-        chunk_id = hashlib.sha256(stable_key.encode("utf-8")).hexdigest()[:32]
+        chunk_id = str(uuid5(NAMESPACE_URL, f"kairix:{stable_key}"))
         return {
             "id": chunk_id,
             "text": text,

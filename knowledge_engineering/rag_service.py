@@ -87,3 +87,22 @@ class RAGService:
             "provider": getattr(self.generator, "provider", "unknown"),
             "model": getattr(self.generator, "model", "unknown"),
         }
+
+    def investigate(
+        self,
+        query: str,
+        *,
+        limit: int = 5,
+        initial_graph_hops: int = 1,
+        max_graph_hops: int = 3,
+    ) -> dict[str, Any]:
+        """Run deeper evidence investigation when initial retrieval is insufficient."""
+        from .investigation import InvestigationAgent
+
+        agent = InvestigationAgent(retriever=self.retriever, generator=self.generator)
+        return agent.investigate(
+            query,
+            limit=limit,
+            initial_graph_hops=initial_graph_hops,
+            max_graph_hops=max_graph_hops,
+        )

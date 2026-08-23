@@ -6,6 +6,7 @@ from typing import Any
 
 from .env import load_environment
 from .hybrid_retrieval import HybridRetriever
+from .investigation_agent import InvestigationAgent
 from .llm.config import LLMConfig
 from .llm.generator import create_generator, parse_generation
 
@@ -97,8 +98,6 @@ class RAGService:
         max_graph_hops: int = 3,
     ) -> dict[str, Any]:
         """Run deeper evidence investigation when initial retrieval is insufficient."""
-        from .investigation import InvestigationAgent
-
         agent = InvestigationAgent(retriever=self.retriever, generator=self.generator)
         return agent.investigate(
             query,

@@ -1,5 +1,5 @@
-"""Backward-compatible import for the dedicated investigation agent."""
+"""Backward-compatible imports for the dedicated investigation agent."""
 
-from .investigation_agent import InvestigationAgent, InvestigationRetriever
+from .investigation_agent import InvestigationAgent, InvestigationPlanner, InvestigationRetriever
 
-__all__ = ["InvestigationAgent", "InvestigationRetriever"]
+__all__ = ["InvestigationAgent", "InvestigationPlanner", "InvestigationRetriever"]

@@ -38,7 +38,7 @@ class RAGService:
 
     @staticmethod
     def _build_prompt(query: str, evidence: list[dict[str, Any]]) -> str:
-        compact = []
+        compact: list[dict[str, Any]] = []
         for item in evidence:
             compact.append(
                 {
@@ -47,6 +47,7 @@ class RAGService:
                     "kind": item.get("kind"),
                     "artifact_id": item.get("artifact_id"),
                     "text": item.get("text"),
+                    "metadata": item.get("metadata", {}),
                     "graph_evidence": item.get("graph_evidence", []),
                 }
             )
@@ -54,7 +55,10 @@ class RAGService:
             "You are the KAIRIX grounded RAG answerer.\n"
             "Answer the user's question ONLY from the supplied evidence.\n"
             "Do not invent tables, relationships, business rules, or dependencies.\n"
-            "If the evidence is insufficient, say that it is insufficient.\n"
+            "Distinguish direct evidence from absence of evidence.\n"
+            "If the supplied evidence does not establish the requested relationship, say so explicitly.\n"
+            "When graph_evidence contains a path, use its relationship_type and node names to describe that path.\n"
+            "Do not infer a direct relationship merely because two entities belong to the same artifact.\n"
             "Return JSON with exactly: answer (string) and evidence_ids (array of strings).\n"
             "Only include evidence_ids that appear in the supplied evidence.\n\n"
             f"USER QUESTION:\n{query.strip()}\n\n"

@@ -1,11 +1,10 @@
-"""Evidence-driven investigation loop for KAIRIX RAG."""
+"""Evidence-driven investigation loop for KAIRIX."""
 from __future__ import annotations
 
+import json
 from typing import Any, Protocol
 
-from .hybrid_retrieval import HybridRetriever
 from .llm.generator import LLMGenerator, parse_generation
-from .rag_service import RAGService
 
 
 class InvestigationRetriever(Protocol):
@@ -15,12 +14,7 @@ class InvestigationRetriever(Protocol):
 class InvestigationAgent:
     """Escalate retrieval when the first evidence set is insufficient."""
 
-    def __init__(
-        self,
-        *,
-        retriever: InvestigationRetriever,
-        generator: LLMGenerator,
-    ) -> None:
+    def __init__(self, *, retriever: InvestigationRetriever, generator: LLMGenerator) -> None:
         self.retriever = retriever
         self.generator = generator
 
@@ -54,19 +48,18 @@ class InvestigationAgent:
 
     @staticmethod
     def _build_prompt(query: str, evidence: list[dict[str, Any]]) -> str:
-        compact = []
-        for item in evidence:
-            compact.append(
-                {
-                    "evidence_id": str(item.get("source_id") or item.get("id")),
-                    "score": item.get("score"),
-                    "kind": item.get("kind"),
-                    "artifact_id": item.get("artifact_id"),
-                    "text": item.get("text"),
-                    "metadata": item.get("metadata", {}),
-                    "graph_evidence": item.get("graph_evidence", []),
-                }
-            )
+        compact = [
+            {
+                "evidence_id": str(item.get("source_id") or item.get("id")),
+                "score": item.get("score"),
+                "kind": item.get("kind"),
+                "artifact_id": item.get("artifact_id"),
+                "text": item.get("text"),
+                "metadata": item.get("metadata", {}),
+                "graph_evidence": item.get("graph_evidence", []),
+            }
+            for item in evidence
+        ]
         return (
             "You are the KAIRIX investigation answerer.\n"
             "Answer ONLY from the supplied investigation evidence.\n"
@@ -75,7 +68,7 @@ class InvestigationAgent:
             "Return JSON with exactly: answer (string) and evidence_ids (array of strings).\n"
             "Only cite evidence_ids present in the supplied evidence.\n\n"
             f"USER QUESTION:\n{query}\n\n"
-            f"INVESTIGATION EVIDENCE:\n{__import__('json').dumps(compact, ensure_ascii=False, indent=2)}"
+            f"INVESTIGATION EVIDENCE:\n{json.dumps(compact, ensure_ascii=False, indent=2)}"
         )
 
     def investigate(
@@ -96,31 +89,22 @@ class InvestigationAgent:
         batches: list[list[dict[str, Any]]] = []
         steps: list[dict[str, Any]] = []
         base = query.strip()
-
         first = self.retriever.search(base, limit=limit, graph_hops=initial_graph_hops)
         batches.append(first)
         steps.append({"query": base, "graph_hops": initial_graph_hops, "retrieved_count": len(first)})
 
         if self._needs_investigation(first):
+            follow_up_hops = min(max_graph_hops, initial_graph_hops + 1)
             for follow_up in self._build_follow_up_queries(base):
-                evidence = self.retriever.search(
-                    follow_up,
-                    limit=limit,
-                    graph_hops=min(max_graph_hops, initial_graph_hops + 1),
-                )
+                evidence = self.retriever.search(follow_up, limit=limit, graph_hops=follow_up_hops)
                 batches.append(evidence)
-                steps.append({
-                    "query": follow_up,
-                    "graph_hops": min(max_graph_hops, initial_graph_hops + 1),
-                    "retrieved_count": len(evidence),
-                })
+                steps.append({"query": follow_up, "graph_hops": follow_up_hops, "retrieved_count": len(evidence)})
 
         evidence = self._merge_evidence(batches)
         generated = parse_generation(self.generator.generate(self._build_prompt(base, evidence)))
         allowed = {self._evidence_key(item) for item in evidence}
         cited = [item for item in generated["evidence_ids"] if item in allowed]
         evidence_by_id = {self._evidence_key(item): item for item in evidence}
-
         return {
             "query": base,
             "answer": generated["answer"],

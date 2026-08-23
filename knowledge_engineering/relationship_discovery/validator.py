@@ -18,6 +18,31 @@ def _candidate_evidence(candidate: Dict[str, Any]) -> List[Dict[str, Any]]:
     return evidence if isinstance(evidence, list) else []
 
 
+def _has_reference_proof(evidence: List[Dict[str, Any]]) -> bool:
+    """Return whether evidence explicitly identifies a canonical reference match."""
+    for item in evidence:
+        if not isinstance(item, dict):
+            continue
+        if item.get("reference_entity_id") or item.get("candidate_entity_id") or item.get("reference_match_id"):
+            return True
+        nested = item.get("reference_match")
+        if isinstance(nested, dict) and (
+            nested.get("reference_entity_id") or nested.get("candidate_entity_id")
+        ):
+            return True
+    return False
+
+
+def _has_explicit_cross_artifact_proof(evidence: List[Dict[str, Any]]) -> bool:
+    """Return whether evidence explicitly records both artifact endpoints."""
+    for item in evidence:
+        if not isinstance(item, dict):
+            continue
+        if item.get("source_artifact_id") and item.get("target_artifact_id"):
+            return str(item["source_artifact_id"]) != str(item["target_artifact_id"])
+    return False
+
+
 def validate_relationships(canonical: Dict[str, Any], relationships: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Validate only newly discovered candidates; preserve canonical facts."""
     entities = _entity_index(canonical)
@@ -41,22 +66,22 @@ def validate_relationships(canonical: Dict[str, Any], relationships: List[Dict[s
         target_artifact = candidate.get("target_artifact_id") or target.get("artifact_id")
         evidence = _candidate_evidence(candidate)
 
-        has_cross_artifact_proof = (
+        has_known_cross_artifact_endpoints = (
             bool(source_artifact)
             and bool(target_artifact)
             and str(source_artifact) != str(target_artifact)
             and str(source_artifact) in artifacts
             and str(target_artifact) in artifacts
-            and any(
-                isinstance(ev, dict)
-                and (ev.get("reference_entity_id") or ev.get("candidate_entity_id") or ev.get("reference_match_id"))
-                for ev in evidence
-            )
         )
+        has_reference_proof = _has_reference_proof(evidence)
+        has_explicit_cross_artifact_proof = _has_explicit_cross_artifact_proof(evidence)
 
-        if has_cross_artifact_proof:
+        if has_known_cross_artifact_endpoints and (has_reference_proof or has_explicit_cross_artifact_proof):
             status = "SUPPORTED"
-            reason = "Canonical reference evidence resolves the relationship across two known artifacts."
+            if has_reference_proof:
+                reason = "Canonical reference evidence resolves the relationship across two known artifacts."
+            else:
+                reason = "Canonical relationship evidence explicitly identifies endpoints in two known artifacts."
         else:
             status = "UNVERIFIED"
             reason = "Canonical metadata does not provide sufficient deterministic evidence to promote the candidate."

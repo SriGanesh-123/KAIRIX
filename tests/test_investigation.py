@@ -17,13 +17,24 @@ class FakeGenerator:
     provider = "fake"
     model = "test"
 
-    def __init__(self, evidence_id):
+    def __init__(self, evidence_id, plan_queries=None):
         self.evidence_id = evidence_id
+        self.plan_queries = plan_queries or []
         self.prompts = []
 
     def generate(self, prompt):
         self.prompts.append(prompt)
-        return '{"answer":"grounded","evidence_ids":["' + self.evidence_id + '"]}'
+        if "investigation planning component" in prompt:
+            queries = str(self.plan_queries).replace("'", '"')
+            return (
+                '{"intent":"investigate", "objectives":[], '
+                f'"retrieval_queries":{queries}, '
+                '"evidence_requirements":[], "requested_output_format":"", "constraints":[]}'
+            )
+        return (
+            '{"answer":"grounded","evidence_ids":["' + self.evidence_id + '"],'
+            '"confidence":0.8,"knowledge_gaps":[]}'
+        )
 
 
 def evidence(source_id, graph_count=0):
@@ -43,7 +54,7 @@ def evidence(source_id, graph_count=0):
 def test_sufficient_initial_evidence_does_not_trigger_investigation():
     query = "transaction policy"
     retriever = FakeRetriever({query: [evidence("entity:a", graph_count=1)]})
-    generator = FakeGenerator("entity:a")
+    generator = FakeGenerator("entity:a", [query])
     agent = InvestigationAgent(retriever=retriever, generator=generator)
 
     result = agent.investigate(query)
@@ -55,12 +66,14 @@ def test_sufficient_initial_evidence_does_not_trigger_investigation():
 
 def test_insufficient_initial_evidence_triggers_follow_up_searches():
     query = "transaction policy"
+    follow_one = f"{query} direct relationships dependencies"
+    follow_two = f"{query} cross-artifact relationships lineage"
     retriever = FakeRetriever({
         query: [evidence("entity:a")],
-        f"{query} direct relationships dependencies": [evidence("entity:b", graph_count=1)],
-        f"{query} cross-artifact relationships lineage": [evidence("entity:c")],
+        follow_one: [evidence("entity:b", graph_count=1)],
+        follow_two: [evidence("entity:c")],
     })
-    generator = FakeGenerator("entity:b")
+    generator = FakeGenerator("entity:b", [follow_one, follow_two])
     agent = InvestigationAgent(retriever=retriever, generator=generator)
 
     result = agent.investigate(query, initial_graph_hops=1, max_graph_hops=3)
@@ -74,12 +87,14 @@ def test_insufficient_initial_evidence_triggers_follow_up_searches():
 def test_investigation_deduplicates_evidence():
     query = "transaction policy"
     shared = evidence("entity:a")
+    follow_one = f"{query} direct relationships dependencies"
+    follow_two = f"{query} cross-artifact relationships lineage"
     retriever = FakeRetriever({
         query: [shared],
-        f"{query} direct relationships dependencies": [shared],
-        f"{query} cross-artifact relationships lineage": [evidence("entity:b")],
+        follow_one: [shared],
+        follow_two: [evidence("entity:b")],
     })
-    generator = FakeGenerator("entity:a")
+    generator = FakeGenerator("entity:a", [follow_one, follow_two])
     agent = InvestigationAgent(retriever=retriever, generator=generator)
 
     result = agent.investigate(query)

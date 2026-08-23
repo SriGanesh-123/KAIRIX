@@ -43,6 +43,21 @@ def _has_explicit_cross_artifact_proof(evidence: List[Dict[str, Any]]) -> bool:
     return False
 
 
+def _reference_match_cardinality(canonical: Dict[str, Any], source_id: str, target_id: str) -> int:
+    """Return the number of candidates attached to the matching reference match."""
+    for match in canonical.get("reference_matches", []):
+        if not isinstance(match, dict):
+            continue
+        if str(match.get("reference_entity_id")) != str(source_id):
+            continue
+        candidate_ids = match.get("candidate_entity_ids", [])
+        if not isinstance(candidate_ids, list):
+            continue
+        if str(target_id) in {str(item) for item in candidate_ids}:
+            return len(candidate_ids)
+    return 0
+
+
 def validate_relationships(canonical: Dict[str, Any], relationships: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Validate only newly discovered candidates; preserve canonical facts."""
     entities = _entity_index(canonical)
@@ -62,6 +77,8 @@ def validate_relationships(canonical: Dict[str, Any], relationships: List[Dict[s
 
         source = entities.get(str(candidate.get("source", "")), {})
         target = entities.get(str(candidate.get("target", "")), {})
+        source_id = str(candidate.get("source", ""))
+        target_id = str(candidate.get("target", ""))
         source_artifact = candidate.get("source_artifact_id") or source.get("artifact_id")
         target_artifact = candidate.get("target_artifact_id") or target.get("artifact_id")
         evidence = _candidate_evidence(candidate)
@@ -75,13 +92,18 @@ def validate_relationships(canonical: Dict[str, Any], relationships: List[Dict[s
         )
         has_reference_proof = _has_reference_proof(evidence)
         has_explicit_cross_artifact_proof = _has_explicit_cross_artifact_proof(evidence)
+        ambiguous_reference = has_reference_proof and _reference_match_cardinality(canonical, source_id, target_id) > 1
+        is_canonical_explicit_relationship = candidate.get("discovery_method") == "canonical_metadata"
 
-        if has_known_cross_artifact_endpoints and (has_reference_proof or has_explicit_cross_artifact_proof):
+        if is_canonical_explicit_relationship and has_known_cross_artifact_endpoints:
             status = "SUPPORTED"
-            if has_reference_proof:
-                reason = "Canonical reference evidence resolves the relationship across two known artifacts."
-            else:
-                reason = "Canonical relationship evidence explicitly identifies endpoints in two known artifacts."
+            reason = "Canonical relationship explicitly identifies endpoints in two known artifacts."
+        elif has_known_cross_artifact_endpoints and has_reference_proof and not ambiguous_reference:
+            status = "SUPPORTED"
+            reason = "Canonical reference evidence resolves the relationship across two known artifacts."
+        elif has_known_cross_artifact_endpoints and has_explicit_cross_artifact_proof:
+            status = "SUPPORTED"
+            reason = "Canonical relationship evidence explicitly identifies endpoints in two known artifacts."
         else:
             status = "UNVERIFIED"
             reason = "Canonical metadata does not provide sufficient deterministic evidence to promote the candidate."

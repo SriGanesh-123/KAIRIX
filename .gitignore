@@ -8,3 +8,9 @@ __pycache__/
 *.log
 .pytest_cache/
 .env
+
+# Local Qdrant runtime
+qdrant-local/
+qdrant-local/
+storage/
+.qdrant-initialized

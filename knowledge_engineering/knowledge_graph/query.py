@@ -78,7 +78,7 @@ class KnowledgeGraphQuery:
         self._validate_limit(limit)
         self._require_connected()
         query = f"""
-        MATCH p=(n:KGNode {{id: $node_id}})-[:KG_RELATIONSHIP*1..{hops}]->(m:KGNode)
+        MATCH p=(n:KGNode {{id: $node_id}})-[:KG_RELATIONSHIP*1..{hops}]-(m:KGNode)
         RETURN [x IN nodes(p) | {{id: x.id, name: x.name, type: x.type, artifact_id: x.artifact_id}}] AS nodes,
                [x IN relationships(p) | {{id: x.id, relationship_type: x.relationship_type, validation_status: x.validation_status}}] AS relationships
         LIMIT $limit

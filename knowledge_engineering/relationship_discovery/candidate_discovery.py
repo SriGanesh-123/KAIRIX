@@ -57,7 +57,8 @@ def discover_reference_candidates(
             continue
 
         confidence = float(match.get("confidence", 0.0) or 0.0)
-        validation = "SUPPORTED" if len(target_ids) == 1 and confidence >= 0.75 else "UNVERIFIED"
+        is_unambiguous = len(target_ids) == 1
+        validation = "SUPPORTED" if is_unambiguous and confidence >= 0.75 else "UNVERIFIED"
 
         for target_id in target_ids:
             target = entities.get(str(target_id))
@@ -77,6 +78,7 @@ def discover_reference_candidates(
                     "candidate_entity_id": target_id,
                     "normalized_name": match.get("normalized_name"),
                     "confidence": confidence,
+                    "candidate_count": len(target_ids),
                 },
                 "source_artifact_id": source_artifact,
                 "target_artifact_id": target_artifact,

@@ -19,9 +19,15 @@ class FakeGenerator:
     provider = "fake"
     model = "test"
 
-    def __init__(self, answer: str, plan_queries: list[str] | None = None) -> None:
+    def __init__(
+        self,
+        answer: str,
+        plan_queries: list[str] | None = None,
+        sufficiency: str | None = None,
+    ) -> None:
         self.answer = answer
         self.plan_queries = plan_queries or []
+        self.sufficiency = sufficiency
         self.prompts: list[str] = []
 
     def generate(self, prompt: str) -> str:
@@ -35,6 +41,8 @@ class FakeGenerator:
                 '"requested_output_format":"answer",'
                 '"constraints":["use supplied evidence only"]}'
             ).replace("'", '"')
+        if "evidence-sufficiency component" in prompt and self.sufficiency is not None:
+            return self.sufficiency
         return self.answer
 
 
@@ -100,6 +108,30 @@ def test_investigation_escalates_using_llm_plan() -> None:
     ]
     assert result["retrieved_count"] == 3
     assert result["plan"]["objectives"] == ["identify supported connections"]
+
+
+def test_investigation_escalates_when_llm_finds_a_knowledge_gap() -> None:
+    query = "What is the direct dependency between two components?"
+    follow_up = "Find direct dependency evidence between the requested components."
+    retriever = FakeRetriever(
+        {
+            query: [_item("entity:shared-artifact", graph=True)],
+            follow_up: [_item("entity:direct-link", graph=True)],
+        }
+    )
+    generator = FakeGenerator(
+        '{"answer":"The direct dependency is supported.","evidence_ids":["entity:direct-link"],"confidence":0.88,"knowledge_gaps":[]}',
+        [query],
+        '{"sufficient":false,"knowledge_gaps":["The initial evidence only shows shared artifact context."],'
+        '"follow_up_queries":["Find direct dependency evidence between the requested components."]}',
+    )
+
+    result = InvestigationAgent(retriever=retriever, generator=generator).investigate(query)
+
+    assert result["investigation_triggered"] is True
+    assert retriever.calls == [(query, 5, 1), (follow_up, 5, 2)]
+    assert "shared artifact context" in result["knowledge_gaps"][0]
+    assert result["evidence_ids"] == ["entity:direct-link"]
 
 
 def test_investigation_filters_generator_citations_to_retrieved_evidence() -> None:

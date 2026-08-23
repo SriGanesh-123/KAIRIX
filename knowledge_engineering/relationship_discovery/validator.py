@@ -67,8 +67,6 @@ def validate_relationships(canonical: Dict[str, Any], relationships: List[Dict[s
     for candidate in relationships:
         item = dict(candidate)
 
-        # Reconciled canonical facts are already authoritative and must not be
-        # downgraded by the candidate validator.
         if candidate.get("validation_status") == "SUPPORTED" and candidate.get("discovery_method") == "canonical_metadata":
             item["validation_status"] = "SUPPORTED"
             item["validation_reason"] = "Canonical reconciliation marked this relationship as CANONICAL_FACT."
@@ -101,7 +99,7 @@ def validate_relationships(canonical: Dict[str, Any], relationships: List[Dict[s
         elif has_known_cross_artifact_endpoints and has_reference_proof and not ambiguous_reference:
             status = "SUPPORTED"
             reason = "Canonical reference evidence resolves the relationship across two known artifacts."
-        elif has_known_cross_artifact_endpoints and has_explicit_cross_artifact_proof:
+        elif has_known_cross_artifact_endpoints and has_explicit_cross_artifact_proof and not has_reference_proof:
             status = "SUPPORTED"
             reason = "Canonical relationship evidence explicitly identifies endpoints in two known artifacts."
         else:

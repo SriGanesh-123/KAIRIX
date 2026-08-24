@@ -19,10 +19,9 @@ class LLMGenerator(Protocol):
 
 
 _STRUCTURED_OUTPUT_SYSTEM_PROMPT = (
-    "Return valid JSON only. Follow the exact JSON schema requested by the user prompt. "
+    "Return valid JSON only. Follow the exact JSON schema requested by the current user prompt. "
     "Do not add markdown fences or explanatory text outside the JSON object. "
-    "The requested schema may differ by investigation stage, so use the schema explicitly "
-    "provided in the current prompt rather than assuming a fixed set of keys."
+    "The schema can differ between investigation stages, so use the schema explicitly requested."
 )
 
 
@@ -95,6 +94,7 @@ def create_generator(config: Any) -> LLMGenerator:
 
 
 def parse_generation(content: str) -> dict[str, Any]:
+    """Parse a final answer response while tolerating harmless JSON envelopes."""
     value = json.loads(content)
     if not isinstance(value, dict):
         raise ValueError("LLM response must be a JSON object")
@@ -102,6 +102,8 @@ def parse_generation(content: str) -> dict[str, Any]:
     evidence_ids = value.get("evidence_ids", [])
     if not isinstance(answer, str) or not answer.strip():
         raise ValueError("LLM response must contain a non-empty answer")
+    if evidence_ids is None:
+        evidence_ids = []
     if not isinstance(evidence_ids, list) or not all(isinstance(item, str) for item in evidence_ids):
         raise ValueError("evidence_ids must be a list of strings")
     return {"answer": answer.strip(), "evidence_ids": evidence_ids}

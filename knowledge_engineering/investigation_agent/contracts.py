@@ -4,9 +4,90 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import asdict, dataclass, field
+from enum import Enum
 from typing import Any, Callable, TypeVar
 
 T = TypeVar("T")
+
+
+class InvestigationErrorCode(str, Enum):
+    """Classified internal failure codes for observability and diagnostics."""
+    RETRIEVAL_ERROR = "RETRIEVAL_ERROR"
+    GRAPH_ERROR = "GRAPH_ERROR"
+    LLM_ERROR = "LLM_ERROR"
+    LLM_SCHEMA_ERROR = "LLM_SCHEMA_ERROR"
+    EVIDENCE_VALIDATION_ERROR = "EVIDENCE_VALIDATION_ERROR"
+    VERIFICATION_ERROR = "VERIFICATION_ERROR"
+    CONFIGURATION_ERROR = "CONFIGURATION_ERROR"
+    TIMEOUT_ERROR = "TIMEOUT_ERROR"
+
+
+@dataclass
+class InvestigationDiagnostic:
+    """Structured internal diagnostic record."""
+    stage: str
+    code: InvestigationErrorCode
+    message: str
+    recoverable: bool = False
+    details: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        result = asdict(self)
+        result["code"] = self.code.value
+        return result
+
+
+def calculate_grounded_confidence(
+    *,
+    evidence: list[dict[str, Any]],
+    cited_ids: list[str],
+    verified: bool,
+    knowledge_gaps: list[str],
+    llm_confidence: float | None = None,
+) -> float:
+    """Compute an explainable, evidence-grounded confidence score.
+
+    Calculated dynamically from:
+    1. Presence of verified citations from retrieved evidence
+    2. Average relevance score of cited evidence items
+    3. Structural graph support in cited evidence
+    4. Verification agreement
+    5. Deduplicated knowledge gaps penalty
+    """
+    if not cited_ids or not evidence:
+        return 0.10 if (evidence and not cited_ids) else 0.0
+
+    evidence_by_id = {str(item.get("source_id") or item.get("id")): item for item in evidence}
+    valid_cited = [evidence_by_id[cid] for cid in cited_ids if cid in evidence_by_id]
+    if not valid_cited:
+        return 0.0
+
+    # 1. Base relevance from cited items
+    scores = [float(item.get("score", 0.0) or 0.0) for item in valid_cited]
+    avg_score = sum(scores) / len(scores) if scores else 0.5
+    # Normalize typical vector score range [0.4 - 0.9] to [0.5 - 1.0]
+    base_confidence = max(0.50, min(0.95, avg_score))
+
+    # 2. Graph grounding bonus
+    has_graph = any(int(item.get("graph_evidence_count", 0) or 0) > 0 for item in valid_cited)
+    if has_graph:
+        base_confidence = min(0.95, base_confidence + 0.08)
+
+    # 3. LLM estimated confidence blending (if validly provided)
+    if llm_confidence is not None and 0.0 <= llm_confidence <= 1.0:
+        base_confidence = 0.6 * base_confidence + 0.4 * llm_confidence
+
+    # 4. Knowledge gap penalty (-0.05 per gap, max penalty 0.30)
+    gap_penalty = min(0.30, 0.05 * len(knowledge_gaps))
+    base_confidence = max(0.20, base_confidence - gap_penalty)
+
+    # 5. Verification status
+    if verified:
+        base_confidence = min(0.95, base_confidence + 0.05)
+    else:
+        base_confidence = min(0.40, base_confidence * 0.5)
+
+    return round(max(0.0, min(1.0, base_confidence)), 2)
 
 
 @dataclass

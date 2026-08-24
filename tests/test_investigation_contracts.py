@@ -216,3 +216,61 @@ def test_generate_structured_retry_exhaustion() -> None:
             lambda c: parse_and_validate_plan(c, "fallback"),
             max_repair_retries=1,
         )
+
+
+def test_calculate_grounded_confidence_metrics() -> None:
+    from knowledge_engineering.investigation_agent.contracts import calculate_grounded_confidence
+
+    evidence = [
+        {"id": "e1", "source_id": "e1", "score": 0.9, "graph_evidence_count": 2},
+        {"id": "e2", "source_id": "e2", "score": 0.8, "graph_evidence_count": 0},
+    ]
+
+    # Grounded with graph and verified -> high confidence
+    conf_high = calculate_grounded_confidence(
+        evidence=evidence,
+        cited_ids=["e1"],
+        verified=True,
+        knowledge_gaps=[],
+        llm_confidence=0.9,
+    )
+    assert 0.80 <= conf_high <= 1.0
+
+    # Insufficient / unverified / with gaps -> low confidence
+    conf_low = calculate_grounded_confidence(
+        evidence=evidence,
+        cited_ids=["e1"],
+        verified=False,
+        knowledge_gaps=["Gap 1", "Gap 2", "Gap 3"],
+        llm_confidence=0.3,
+    )
+    assert 0.0 <= conf_low <= 0.40
+
+    # No citations -> 0.10 or 0.0
+    conf_none = calculate_grounded_confidence(
+        evidence=evidence,
+        cited_ids=[],
+        verified=False,
+        knowledge_gaps=["No evidence"],
+    )
+    assert conf_none == 0.10
+
+
+def test_investigation_diagnostics_data_model() -> None:
+    from knowledge_engineering.investigation_agent.contracts import (
+        InvestigationDiagnostic,
+        InvestigationErrorCode,
+    )
+
+    diag = InvestigationDiagnostic(
+        stage="retrieval",
+        code=InvestigationErrorCode.RETRIEVAL_ERROR,
+        message="Connection dropped",
+        recoverable=True,
+        details={"query": "test query"},
+    )
+    d_dict = diag.to_dict()
+    assert d_dict["stage"] == "retrieval"
+    assert d_dict["code"] == "RETRIEVAL_ERROR"
+    assert d_dict["message"] == "Connection dropped"
+    assert d_dict["recoverable"] is True

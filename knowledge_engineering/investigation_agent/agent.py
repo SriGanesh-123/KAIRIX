@@ -7,10 +7,13 @@ from typing import Any, Protocol
 from ..llm.generator import LLMGenerator, generate_structured, parse_generation
 from .contracts import (
     GroundedAnswer,
+    InvestigationDiagnostic,
+    InvestigationErrorCode,
     InvestigationPlan,
     SufficiencyAssessment,
     VerificationResult,
     _normalize_string_list,
+    calculate_grounded_confidence,
     extract_json_payload,
     parse_and_validate_answer,
     parse_and_validate_plan,
@@ -174,7 +177,11 @@ class InvestigationAgent:
             f"USER REQUEST:\n{json.dumps(request, ensure_ascii=False, indent=2)}"
         )
 
-    def _plan(self, request: dict[str, Any]) -> InvestigationPlan:
+    def _plan(
+        self,
+        request: dict[str, Any],
+        diagnostics: list[InvestigationDiagnostic] | None = None,
+    ) -> InvestigationPlan:
         prompt = self._build_plan_prompt(request)
         try:
             return generate_structured(
@@ -183,7 +190,16 @@ class InvestigationAgent:
                 lambda content: parse_and_validate_plan(content, request["question"]),
                 max_repair_retries=1,
             )
-        except Exception:
+        except Exception as exc:
+            if diagnostics is not None:
+                diagnostics.append(
+                    InvestigationDiagnostic(
+                        stage="planning",
+                        code=InvestigationErrorCode.LLM_SCHEMA_ERROR,
+                        message=str(exc),
+                        recoverable=True,
+                    )
+                )
             return InvestigationPlan(
                 intent="Investigate the supplied request using available evidence.",
                 objectives=[],
@@ -220,6 +236,7 @@ class InvestigationAgent:
         query: str,
         plan: InvestigationPlan,
         evidence: list[dict[str, Any]],
+        diagnostics: list[InvestigationDiagnostic] | None = None,
     ) -> SufficiencyAssessment:
         if not evidence:
             return SufficiencyAssessment(
@@ -235,7 +252,16 @@ class InvestigationAgent:
                 parse_and_validate_sufficiency,
                 max_repair_retries=1,
             )
-        except Exception:
+        except Exception as exc:
+            if diagnostics is not None:
+                diagnostics.append(
+                    InvestigationDiagnostic(
+                        stage="sufficiency",
+                        code=InvestigationErrorCode.LLM_SCHEMA_ERROR,
+                        message=str(exc),
+                        recoverable=True,
+                    )
+                )
             has_graph = self._has_graph_support(evidence)
             return SufficiencyAssessment(
                 sufficient=bool(evidence) and has_graph,
@@ -281,6 +307,7 @@ class InvestigationAgent:
         plan: InvestigationPlan,
         knowledge_gaps: list[str],
         allowed: set[str],
+        diagnostics: list[InvestigationDiagnostic] | None = None,
     ) -> GroundedAnswer:
         if not evidence:
             return GroundedAnswer(
@@ -299,17 +326,33 @@ class InvestigationAgent:
             )
         except Exception as exc:
             err_msg = str(exc)
-            diagnostic = "The answer-generation step did not return a valid structured result."
+            diagnostic_msg = "The answer-generation step did not return a valid structured result."
+            err_code = InvestigationErrorCode.LLM_SCHEMA_ERROR
             if "Rate limit" in err_msg or "rate_limit_exceeded" in err_msg:
-                diagnostic = "Provider rate limit reached during answer generation."
+                diagnostic_msg = "Provider rate limit reached during answer generation."
+                err_code = InvestigationErrorCode.LLM_ERROR
             elif "Request too large" in err_msg:
-                diagnostic = "Prompt context exceeded model request size limits."
+                diagnostic_msg = "Prompt context exceeded model request size limits."
+                err_code = InvestigationErrorCode.LLM_ERROR
+            elif "timed out" in err_msg.lower() or "timeout" in err_msg.lower():
+                diagnostic_msg = "Provider request timed out during answer generation."
+                err_code = InvestigationErrorCode.TIMEOUT_ERROR
+
+            if diagnostics is not None:
+                diagnostics.append(
+                    InvestigationDiagnostic(
+                        stage="generation",
+                        code=err_code,
+                        message=diagnostic_msg,
+                        recoverable=False,
+                    )
+                )
 
             return GroundedAnswer(
                 answer="The investigation could not produce a valid grounded answer from the supplied evidence.",
                 evidence_ids=[],
                 confidence=0.0,
-                knowledge_gaps=[diagnostic],
+                knowledge_gaps=[diagnostic_msg],
             )
 
     @classmethod
@@ -341,6 +384,7 @@ class InvestigationAgent:
         draft: GroundedAnswer,
         evidence: list[dict[str, Any]],
         allowed: set[str],
+        diagnostics: list[InvestigationDiagnostic] | None = None,
     ) -> VerificationResult:
         if not evidence or not draft.answer or (draft.confidence == 0.0 and not draft.evidence_ids):
             return VerificationResult(
@@ -358,7 +402,16 @@ class InvestigationAgent:
                 lambda content: parse_and_validate_verification(content, draft, allowed),
                 max_repair_retries=1,
             )
-        except Exception:
+        except Exception as exc:
+            if diagnostics is not None:
+                diagnostics.append(
+                    InvestigationDiagnostic(
+                        stage="verification",
+                        code=InvestigationErrorCode.VERIFICATION_ERROR,
+                        message=str(exc),
+                        recoverable=True,
+                    )
+                )
             return VerificationResult(
                 verified=False,
                 answer=draft.answer,
@@ -389,12 +442,25 @@ class InvestigationAgent:
         if not 1 <= initial_graph_hops <= max_graph_hops <= 4:
             raise ValueError("graph hop range must be between 1 and 4")
 
-        plan = self._plan(request)
+        diagnostics: list[InvestigationDiagnostic] = []
+        plan = self._plan(request, diagnostics=diagnostics)
         base = request["question"]
         batches: list[list[dict[str, Any]]] = []
         steps: list[dict[str, Any]] = []
 
-        first = self.retriever.search(base, limit=limit, graph_hops=initial_graph_hops)
+        try:
+            first = self.retriever.search(base, limit=limit, graph_hops=initial_graph_hops)
+        except Exception as exc:
+            diagnostics.append(
+                InvestigationDiagnostic(
+                    stage="initial_retrieval",
+                    code=InvestigationErrorCode.RETRIEVAL_ERROR,
+                    message=str(exc),
+                    recoverable=False,
+                )
+            )
+            first = []
+
         batches.append(first)
         steps.append(
             {
@@ -405,7 +471,7 @@ class InvestigationAgent:
             }
         )
 
-        assessment = self._assess_sufficiency(base, plan, first)
+        assessment = self._assess_sufficiency(base, plan, first, diagnostics=diagnostics)
         investigation_gaps = list(assessment.knowledge_gaps)
         follow_up_queries = assessment.follow_up_queries or plan.retrieval_queries
 
@@ -432,14 +498,23 @@ class InvestigationAgent:
                             "evidence_ids": [self._evidence_key(item) for item in evidence],
                         }
                     )
-                except Exception:
+                except Exception as exc:
+                    diagnostics.append(
+                        InvestigationDiagnostic(
+                            stage="follow_up_retrieval",
+                            code=InvestigationErrorCode.RETRIEVAL_ERROR,
+                            message=str(exc),
+                            recoverable=True,
+                            details={"query": follow_up},
+                        )
+                    )
                     continue
 
         evidence = self._merge_evidence(batches)
         allowed = {self._evidence_key(item) for item in evidence}
 
-        generated = self._generate_answer(base, evidence, plan, investigation_gaps, allowed)
-        verified = self._verify_answer(base, generated, evidence, allowed)
+        generated = self._generate_answer(base, evidence, plan, investigation_gaps, allowed, diagnostics=diagnostics)
+        verified = self._verify_answer(base, generated, evidence, allowed, diagnostics=diagnostics)
 
         evidence_by_id = {self._evidence_key(item): item for item in evidence}
         combined_gaps = _normalize_string_list(investigation_gaps + verified.knowledge_gaps)
@@ -471,6 +546,8 @@ class InvestigationAgent:
             "confidence": verified.confidence,
             "confidence_level": self._confidence_level(verified.confidence),
             "answer_verified": verified.verified,
+            "diagnostics": [d.to_dict() for d in diagnostics],
             "provider": getattr(self.generator, "provider", "unknown"),
             "model": getattr(self.generator, "model", "unknown"),
         }
+

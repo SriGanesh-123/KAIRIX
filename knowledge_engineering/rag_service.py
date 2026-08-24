@@ -7,6 +7,7 @@ from typing import Any
 from .env import load_environment
 from .hybrid_retrieval import HybridRetriever
 from .investigation_agent import InvestigationAgent
+from .investigation_agent.formats import FormatRegistry
 from .llm.config import LLMConfig
 from .llm.generator import create_generator, parse_generation
 
@@ -19,10 +20,12 @@ class RAGService:
         *,
         retriever: HybridRetriever | None = None,
         generator: Any | None = None,
+        format_registry: FormatRegistry | None = None,
     ) -> None:
         load_environment()
         self.retriever = retriever or HybridRetriever()
         self._owns_retriever = retriever is None
+        self.format_registry = format_registry or FormatRegistry()
         self.generator = generator
         if self.generator is None:
             config = LLMConfig.from_env()
@@ -91,17 +94,43 @@ class RAGService:
 
     def investigate(
         self,
-        query: str,
+        query: str | dict[str, Any],
         *,
         limit: int = 5,
         initial_graph_hops: int = 1,
         max_graph_hops: int = 3,
+        output_format: str | None = None,
     ) -> dict[str, Any]:
-        """Run deeper evidence investigation when initial retrieval is insufficient."""
+        """Run deeper evidence investigation and optionally validate a predefined format."""
+        request: str | dict[str, Any] = query
+        if output_format:
+            if isinstance(query, str):
+                request = {"question": query, "output_format": output_format}
+            else:
+                request = dict(query)
+                request["output_format"] = output_format
+
         agent = InvestigationAgent(retriever=self.retriever, generator=self.generator)
-        return agent.investigate(
-            query,
+        result = agent.investigate(
+            request,
             limit=limit,
             initial_graph_hops=initial_graph_hops,
             max_graph_hops=max_graph_hops,
         )
+
+        requested = result["request"].get("output_format") or result["plan"].get("requested_output_format")
+        if requested:
+            definition = self.format_registry.resolve(str(requested))
+            result["format"] = {
+                "name": definition.name,
+                "description": definition.description,
+                "required_sections": list(definition.required_sections),
+            }
+            result["format_validation_errors"] = definition.validate(result)
+            result["format_valid"] = not result["format_validation_errors"]
+        else:
+            result["format"] = None
+            result["format_validation_errors"] = []
+            result["format_valid"] = True
+
+        return result

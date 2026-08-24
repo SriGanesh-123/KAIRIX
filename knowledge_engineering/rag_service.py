@@ -21,11 +21,13 @@ class RAGService:
         retriever: HybridRetriever | None = None,
         generator: Any | None = None,
         format_registry: FormatRegistry | None = None,
+        investigation_config: Any | None = None,
     ) -> None:
         load_environment()
         self.retriever = retriever or HybridRetriever()
         self._owns_retriever = retriever is None
         self.format_registry = format_registry or FormatRegistry()
+        self.investigation_config = investigation_config
         self.generator = generator
         if self.generator is None:
             config = LLMConfig.from_env()
@@ -114,7 +116,11 @@ class RAGService:
                 request = dict(query)
                 request["output_format"] = output_format
 
-        agent = InvestigationAgent(retriever=self.retriever, generator=self.generator)
+        agent = InvestigationAgent(
+            retriever=self.retriever,
+            generator=self.generator,
+            config=self.investigation_config,
+        )
         result = agent.investigate(
             request,
             limit=limit,

@@ -31,6 +31,7 @@ def main() -> None:
                 continue
 
             print(f"\nAnswer: {result['answer']}")
+            print(f"Status: {result.get('status', 'SUCCESS')}")
             print(f"Confidence: {result['confidence']:.2f} ({result['confidence_level']})")
             print(f"Investigation triggered: {result['investigation_triggered']}")
 

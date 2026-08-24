@@ -25,20 +25,13 @@ _STRUCTURED_OUTPUT_SYSTEM_PROMPT = (
 )
 
 
-def _generate_with_retry(request, max_retries: int) -> str:
-    last_error: Exception | None = None
-    for attempt in range(max_retries + 1):
-        try:
-            response = request()
-            content = getattr(response, "content", None)
-            if not content:
-                raise RuntimeError("LLM returned an empty response")
-            return content
-        except Exception as exc:
-            last_error = exc
-            if attempt < max_retries:
-                time.sleep(2 ** attempt)
-    raise RuntimeError(f"LLM generation failed: {last_error}")
+def _repair_prompt(prompt: str, error: Exception) -> str:
+    return (
+        f"{prompt}\n\n"
+        "Your previous response could not be validated. Retry with a valid JSON object that follows "
+        "the exact schema requested above. Do not add commentary or markdown. Validation error: "
+        f"{error}"
+    )
 
 
 class GroqGenerator:
@@ -51,13 +44,14 @@ class GroqGenerator:
 
     def generate(self, prompt: str) -> str:
         last_error: Exception | None = None
+        current_prompt = prompt
         for attempt in range(self.max_retries + 1):
             try:
                 response = self.client.chat.completions.create(
                     model=self.model,
                     messages=[
                         {"role": "system", "content": _STRUCTURED_OUTPUT_SYSTEM_PROMPT},
-                        {"role": "user", "content": prompt},
+                        {"role": "user", "content": current_prompt},
                     ],
                     temperature=0.1,
                     response_format={"type": "json_object"},
@@ -68,6 +62,7 @@ class GroqGenerator:
                 return content
             except Exception as exc:
                 last_error = exc
+                current_prompt = _repair_prompt(prompt, exc)
                 if attempt < self.max_retries:
                     time.sleep(2 ** attempt)
         raise RuntimeError(f"Groq generation failed: {last_error}")
@@ -83,11 +78,12 @@ class GeminiGenerator:
 
     def generate(self, prompt: str) -> str:
         last_error: Exception | None = None
+        current_prompt = prompt
         for attempt in range(self.max_retries + 1):
             try:
                 response = self.client.models.generate_content(
                     model=self.model,
-                    contents=prompt,
+                    contents=current_prompt,
                     config=types.GenerateContentConfig(response_mime_type="application/json"),
                 )
                 if not response.text:
@@ -95,6 +91,7 @@ class GeminiGenerator:
                 return response.text
             except gemini_errors.APIError as exc:
                 last_error = exc
+                current_prompt = _repair_prompt(prompt, exc)
                 if attempt < self.max_retries:
                     time.sleep(2 ** attempt)
         raise RuntimeError(f"Gemini generation failed: {last_error}")

@@ -25,6 +25,22 @@ _STRUCTURED_OUTPUT_SYSTEM_PROMPT = (
 )
 
 
+def _generate_with_retry(request, max_retries: int) -> str:
+    last_error: Exception | None = None
+    for attempt in range(max_retries + 1):
+        try:
+            response = request()
+            content = getattr(response, "content", None)
+            if not content:
+                raise RuntimeError("LLM returned an empty response")
+            return content
+        except Exception as exc:
+            last_error = exc
+            if attempt < max_retries:
+                time.sleep(2 ** attempt)
+    raise RuntimeError(f"LLM generation failed: {last_error}")
+
+
 class GroqGenerator:
     provider = "groq"
 
@@ -94,7 +110,7 @@ def create_generator(config: Any) -> LLMGenerator:
 
 
 def parse_generation(content: str) -> dict[str, Any]:
-    """Parse a final answer response while tolerating harmless JSON envelopes."""
+    """Parse the final answer envelope without weakening its required fields."""
     value = json.loads(content)
     if not isinstance(value, dict):
         raise ValueError("LLM response must be a JSON object")

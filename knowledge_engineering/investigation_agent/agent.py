@@ -31,7 +31,7 @@ class InvestigationPlanner(Protocol):
 
 
 class InvestigationAgent:
-    """Plan, assess, escalate, retrieve, and synthesize evidence.
+    """Plan, assess, escalate, retrieve, verify, and synthesize evidence.
 
     The agent is domain-neutral. Domain terminology, document types, output
     formats, and retrieval objectives come from the request and configured LLM,
@@ -64,9 +64,24 @@ class InvestigationAgent:
         for batch in batches:
             for item in batch:
                 key = cls._evidence_key(item)
-                if key and key not in merged:
+                if not key:
+                    continue
+                existing = merged.get(key)
+                if existing is None:
                     merged[key] = item
-        return list(merged.values())
+                    continue
+                current_score = float(existing.get("score", 0.0) or 0.0)
+                candidate_score = float(item.get("score", 0.0) or 0.0)
+                if candidate_score > current_score:
+                    merged[key] = item
+        return sorted(
+            merged.values(),
+            key=lambda item: (
+                float(item.get("score", 0.0) or 0.0),
+                int(item.get("graph_evidence_count", 0) or 0),
+            ),
+            reverse=True,
+        )
 
     @staticmethod
     def _has_graph_support(evidence: list[dict[str, Any]]) -> bool:
@@ -95,7 +110,8 @@ class InvestigationAgent:
             "Understand the supplied user request and create a domain-neutral investigation plan.\n"
             "Do not invent facts about the underlying system.\n"
             "Preserve any document type, output format, constraints, or scope explicitly supplied.\n"
-            "Generate retrieval queries that are useful for finding supporting evidence.\n"
+            "Generate a small set of complementary retrieval queries that cover the request from distinct evidence perspectives.\n"
+            "Prefer precise entity, relationship, dependency, rule, lineage, or calculation terms when the request implies them, but derive all terms from the request.\n"
             "Return JSON with exactly these keys:\n"
             "intent (string), objectives (array of strings), retrieval_queries (array of strings),\n"
             "evidence_requirements (array of strings), requested_output_format (string), constraints (array of strings).\n\n"
@@ -170,7 +186,7 @@ class InvestigationAgent:
             "You are the evidence-sufficiency component of a domain-neutral investigation agent.\n"
             "Decide whether the supplied evidence actually answers the user's requested intent.\n"
             "Do not treat the mere presence of graph evidence as sufficient.\n"
-            "For relationship or dependency questions, require evidence that establishes the requested connection, not merely that entities share an artifact.\n"
+            "Require evidence that establishes the requested fact, connection, dependency, lineage, calculation, or other objective rather than merely related context.\n"
             "For other requests, judge against the stated objectives and evidence requirements.\n"
             "If important parts are missing, return sufficient=false and describe the knowledge gaps.\n"
             "Return JSON with exactly these keys: sufficient (boolean), knowledge_gaps (array of strings),\n"
@@ -211,8 +227,6 @@ class InvestigationAgent:
                 self.planner.generate(self._build_sufficiency_prompt(query, plan, evidence))
             )
         except Exception:
-            # Conservative fallback: graph-backed evidence can stop escalation only
-            # when it exists; otherwise continue investigation.
             return {
                 "sufficient": bool(evidence) and self._has_graph_support(evidence),
                 "knowledge_gaps": [] if evidence and self._has_graph_support(evidence) else [
@@ -242,15 +256,54 @@ class InvestigationAgent:
         ]
         return (
             "You are the KAIRIX investigation answerer.\n"
+            "Produce a precise, useful, evidence-grounded answer to the user's request.\n"
             "Answer ONLY from the supplied investigation evidence.\n"
-            "Do not invent relationships, dependencies, business rules, or missing facts.\n"
-            "If evidence remains insufficient, explicitly say that the requested fact cannot be established.\n"
+            "Do not invent relationships, dependencies, business rules, formulas, fields, schemas, lineage, or missing facts.\n"
+            "Start with the direct answer, then explain the supporting reasoning in a concise step-by-step form when the evidence permits.\n"
+            "Name relevant artifacts, entities, rules, or other source concepts only when they are present in the evidence.\n"
+            "Distinguish directly supported facts from cautious inference. Never present an inference as an established fact.\n"
+            "For every important factual claim, cite one or more supporting evidence IDs in the evidence_ids output.\n"
+            "If evidence is incomplete or conflicting, explicitly state what is established, what is uncertain, and what is missing.\n"
+            "Do not repeat the same knowledge gap in different wording. Deduplicate gaps and keep them specific.\n"
+            "If the evidence cannot establish the requested fact, say so clearly rather than filling the gap from general knowledge.\n"
             "Return JSON with exactly: answer (string), evidence_ids (array of strings), confidence (number 0.0-1.0),\n"
             "and knowledge_gaps (array of strings). Only cite evidence_ids present in the supplied evidence.\n\n"
             f"USER QUESTION:\n{query}\n\n"
             f"INVESTIGATION PLAN:\n{json.dumps(plan, ensure_ascii=False, indent=2)}\n\n"
             f"KNOWN KNOWLEDGE GAPS:\n{json.dumps(knowledge_gaps, ensure_ascii=False, indent=2)}\n\n"
             f"INVESTIGATION EVIDENCE:\n{json.dumps(compact, ensure_ascii=False, indent=2)}"
+        )
+
+    @staticmethod
+    def _build_verification_prompt(
+        query: str,
+        draft: dict[str, Any],
+        evidence: list[dict[str, Any]],
+    ) -> str:
+        compact = [
+            {
+                "evidence_id": str(item.get("source_id") or item.get("id")),
+                "text": item.get("text"),
+                "kind": item.get("kind"),
+                "artifact_id": item.get("artifact_id"),
+                "metadata": item.get("metadata", {}),
+                "graph_evidence": item.get("graph_evidence", []),
+            }
+            for item in evidence
+        ]
+        return (
+            "You are the final evidence verifier for a domain-neutral investigation agent.\n"
+            "Review the draft answer against the supplied evidence only.\n"
+            "Remove or rewrite unsupported claims. Preserve useful supported detail.\n"
+            "Ensure every cited evidence ID exists and actually supports the answer.\n"
+            "Do not add facts that are absent from the evidence.\n"
+            "Lower confidence when the evidence is incomplete or only indirectly supports the answer.\n"
+            "Deduplicate knowledge gaps.\n"
+            "Return JSON with exactly: answer (string), evidence_ids (array of strings), confidence (number 0.0-1.0),\n"
+            "knowledge_gaps (array of strings), verified (boolean).\n\n"
+            f"USER QUESTION:\n{query}\n\n"
+            f"DRAFT ANSWER:\n{json.dumps(draft, ensure_ascii=False, indent=2)}\n\n"
+            f"SUPPLIED EVIDENCE:\n{json.dumps(compact, ensure_ascii=False, indent=2)}"
         )
 
     @classmethod
@@ -265,14 +318,50 @@ class InvestigationAgent:
         gaps = value.get("knowledge_gaps", [])
         if not isinstance(gaps, list):
             gaps = [str(gaps)]
-        gaps = [str(item) for item in gaps]
-        cited = [item for item in generated["evidence_ids"] if item in allowed]
+        gaps = list(dict.fromkeys(str(item).strip() for item in gaps if str(item).strip()))
+        cited = list(dict.fromkeys(item for item in generated["evidence_ids"] if item in allowed))
         return {
             "answer": generated["answer"],
             "evidence_ids": cited,
             "confidence": confidence,
             "knowledge_gaps": gaps,
         }
+
+    def _verify_answer(
+        self,
+        query: str,
+        draft: dict[str, Any],
+        evidence: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        allowed = {self._evidence_key(item) for item in evidence}
+        try:
+            value = json.loads(
+                self.planner.generate(self._build_verification_prompt(query, draft, evidence))
+            )
+            if not isinstance(value, dict) or not isinstance(value.get("verified"), bool):
+                raise ValueError("invalid verification response")
+            verified = bool(value["verified"])
+            answer = str(value.get("answer", draft["answer"])).strip()
+            cited = [item for item in value.get("evidence_ids", []) if item in allowed]
+            gaps = value.get("knowledge_gaps", draft["knowledge_gaps"])
+            if not isinstance(gaps, list):
+                gaps = [str(gaps)]
+            try:
+                confidence = max(0.0, min(1.0, float(value.get("confidence", draft["confidence"]))))
+            except (TypeError, ValueError):
+                confidence = draft["confidence"]
+            return {
+                "answer": answer or draft["answer"],
+                "evidence_ids": list(dict.fromkeys(cited)),
+                "confidence": confidence,
+                "knowledge_gaps": list(dict.fromkeys(str(item).strip() for item in gaps if str(item).strip())),
+                "verified": verified,
+            }
+        except Exception:
+            return {
+                **draft,
+                "verified": False,
+            }
 
     def _confidence_level(self, confidence: float) -> str:
         low, high = self.confidence_thresholds
@@ -356,10 +445,11 @@ class InvestigationAgent:
                 "knowledge_gaps": ["The answer-generation step did not return a valid structured result."],
             }
 
+        verified = self._verify_answer(base, generated, evidence)
         evidence_by_id = {self._evidence_key(item): item for item in evidence}
-        combined_gaps = list(dict.fromkeys(investigation_gaps + generated["knowledge_gaps"]))
-        if not generated["evidence_ids"]:
-            combined_gaps.append("No retrieved evidence was cited by the answer generator.")
+        combined_gaps = list(dict.fromkeys(investigation_gaps + verified["knowledge_gaps"]))
+        if not verified["evidence_ids"]:
+            combined_gaps.append("No retrieved evidence was cited by the answer generator or verifier.")
 
         trace_references = [
             {
@@ -375,16 +465,17 @@ class InvestigationAgent:
             "query": base,
             "request": request,
             "plan": plan,
-            "answer": generated["answer"],
-            "evidence_ids": generated["evidence_ids"],
-            "evidence": [evidence_by_id[item] for item in generated["evidence_ids"]],
+            "answer": verified["answer"],
+            "evidence_ids": verified["evidence_ids"],
+            "evidence": [evidence_by_id[item] for item in verified["evidence_ids"]],
             "retrieved_count": len(evidence),
             "investigation_triggered": len(steps) > 1,
             "steps": steps,
             "trace_references": trace_references,
             "knowledge_gaps": combined_gaps,
-            "confidence": generated["confidence"],
-            "confidence_level": self._confidence_level(generated["confidence"]),
+            "confidence": verified["confidence"],
+            "confidence_level": self._confidence_level(verified["confidence"]),
+            "answer_verified": verified["verified"],
             "provider": getattr(self.generator, "provider", "unknown"),
             "model": getattr(self.generator, "model", "unknown"),
         }

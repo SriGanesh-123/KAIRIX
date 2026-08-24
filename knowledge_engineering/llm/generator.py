@@ -2,12 +2,24 @@
 from __future__ import annotations
 
 import json
+import random
 import time
 from typing import Any, Callable, Protocol, TypeVar
 
 from google import genai
 from google.genai import errors as gemini_errors, types
 from groq import Groq
+
+from .errors import (
+    LLMAuthError,
+    LLMBadRequestError,
+    LLMEmptyResponseError,
+    LLMError,
+    LLMRateLimitError,
+    LLMServerError,
+    LLMTimeoutError,
+    classify_exception,
+)
 
 T = TypeVar("T")
 
@@ -39,10 +51,21 @@ def _build_repair_prompt(prompt: str, error_message: str) -> str:
 class GroqGenerator:
     provider = "groq"
 
-    def __init__(self, api_key: str, model: str, max_retries: int = 3) -> None:
+    def __init__(
+        self,
+        api_key: str,
+        model: str,
+        max_retries: int = 3,
+        base_delay: float = 1.0,
+        max_delay: float = 10.0,
+        timeout: float = 30.0,
+    ) -> None:
         self.model = model
         self.max_retries = max_retries
-        self.client = Groq(api_key=api_key)
+        self.base_delay = base_delay
+        self.max_delay = max_delay
+        self.timeout = timeout
+        self.client = Groq(api_key=api_key, timeout=timeout)
 
     def generate(self, prompt: str) -> str:
         last_error: Exception | None = None
@@ -59,21 +82,45 @@ class GroqGenerator:
                 )
                 content = response.choices[0].message.content
                 if not content:
-                    raise RuntimeError("Groq returned an empty response")
+                    raise LLMEmptyResponseError("Groq returned an empty response", provider=self.provider, model=self.model)
                 return content
             except Exception as exc:
-                last_error = exc
+                classified = classify_exception(exc, provider=self.provider, model=self.model)
+                last_error = classified
+
+                # Non-retryable errors fail immediately (401 Auth, 400 Bad Request)
+                if not classified.retryable:
+                    raise classified from exc
+
                 if attempt < self.max_retries:
-                    time.sleep(2 ** attempt)
+                    if isinstance(classified, LLMRateLimitError) and classified.retry_after is not None:
+                        delay = min(self.max_delay, max(classified.retry_after, self.base_delay * (2 ** attempt)) + random.uniform(0.1, 0.4))
+                    else:
+                        delay = min(self.max_delay, (self.base_delay * (2 ** attempt)) + random.uniform(0.1, 0.4))
+                    time.sleep(delay)
+
+        if isinstance(last_error, LLMError):
+            raise last_error
         raise RuntimeError(f"Groq generation failed ({self.model}): {last_error}") from last_error
 
 
 class GeminiGenerator:
     provider = "gemini"
 
-    def __init__(self, api_key: str, model: str, max_retries: int = 3) -> None:
+    def __init__(
+        self,
+        api_key: str,
+        model: str,
+        max_retries: int = 3,
+        base_delay: float = 1.0,
+        max_delay: float = 10.0,
+        timeout: float = 30.0,
+    ) -> None:
         self.model = model
         self.max_retries = max_retries
+        self.base_delay = base_delay
+        self.max_delay = max_delay
+        self.timeout = timeout
         self.client = genai.Client(api_key=api_key)
 
     def generate(self, prompt: str) -> str:
@@ -86,21 +133,34 @@ class GeminiGenerator:
                     config=types.GenerateContentConfig(response_mime_type="application/json"),
                 )
                 if not response.text:
-                    raise RuntimeError("Gemini returned an empty response")
+                    raise LLMEmptyResponseError("Gemini returned an empty response", provider=self.provider, model=self.model)
                 return response.text
-            except gemini_errors.APIError as exc:
-                last_error = exc
+            except Exception as exc:
+                classified = classify_exception(exc, provider=self.provider, model=self.model)
+                last_error = classified
+
+                if not classified.retryable:
+                    raise classified from exc
+
                 if attempt < self.max_retries:
-                    time.sleep(2 ** attempt)
+                    if isinstance(classified, LLMRateLimitError) and classified.retry_after is not None:
+                        delay = min(self.max_delay, max(classified.retry_after, self.base_delay * (2 ** attempt)) + random.uniform(0.1, 0.4))
+                    else:
+                        delay = min(self.max_delay, (self.base_delay * (2 ** attempt)) + random.uniform(0.1, 0.4))
+                    time.sleep(delay)
+
+        if isinstance(last_error, LLMError):
+            raise last_error
         raise RuntimeError(f"Gemini generation failed ({self.model}): {last_error}") from last_error
 
 
 def create_generator(config: Any) -> LLMGenerator:
     provider = config.provider.lower()
+    max_retries = getattr(config, "max_retries", 3)
     if provider == "groq":
-        return GroqGenerator(config.api_key, config.model, config.max_retries)
+        return GroqGenerator(config.api_key, config.model, max_retries)
     if provider == "gemini":
-        return GeminiGenerator(config.api_key, config.model, config.max_retries)
+        return GeminiGenerator(config.api_key, config.model, max_retries)
     raise ValueError(f"Unsupported LLM_PROVIDER={config.provider!r}. Supported providers: gemini, groq")
 
 
@@ -110,7 +170,11 @@ def generate_structured(
     parser_func: Callable[[str], T],
     max_repair_retries: int = 1,
 ) -> T:
-    """Generate and parse structured output with schema-aware repair retries."""
+    """Generate and parse structured output with schema-aware repair retries.
+
+    If the generator itself raises an LLM infrastructure error (RateLimit, Auth, Timeout, Server),
+    it is propagated immediately rather than formatted as an LLM prompt repair.
+    """
     current_prompt = prompt
     last_validation_error: str = ""
 

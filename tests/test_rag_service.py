@@ -34,6 +34,29 @@ class FakeGenerator:
         return self.response
 
 
+class FakeInvestigationGenerator:
+    provider = "fake"
+    model = "test"
+
+    def __init__(self) -> None:
+        self.prompts: list[str] = []
+
+    def generate(self, prompt: str) -> str:
+        self.prompts.append(prompt)
+        if "investigation planning component" in prompt:
+            return (
+                '{"intent":"calculate premium", "objectives":[], '
+                '"retrieval_queries":["premium calculation"], '
+                '"evidence_requirements":[], "requested_output_format":"plain text summary", "constraints":[]}'
+            )
+        if "evidence-sufficiency component" in prompt:
+            return '{"sufficient":true,"knowledge_gaps":[],"follow_up_queries":[]}'
+        return (
+            '{"answer":"Premium is calculated from the retrieved evidence.",'
+            '"evidence_ids":["entity:premium"],"confidence":0.8,"knowledge_gaps":[]}'
+        )
+
+
 def _evidence() -> list[dict[str, Any]]:
     return [
         {
@@ -115,3 +138,27 @@ def test_rag_service_rejects_empty_query() -> None:
         assert str(exc) == "query must not be empty"
     else:
         raise AssertionError("Expected ValueError for an empty query")
+
+
+def test_investigation_ignores_unrequested_natural_language_format() -> None:
+    retriever = FakeRetriever([
+        {
+            "id": "vector-premium",
+            "score": 0.9,
+            "text": "Premium evidence",
+            "kind": "rule",
+            "source_id": "entity:premium",
+            "artifact_id": "artifact:premium",
+            "graph_evidence": [],
+            "graph_evidence_count": 1,
+        }
+    ])
+    generator = FakeInvestigationGenerator()
+    service = RAGService(retriever=retriever, generator=generator)
+
+    result = service.investigate("How is premium calculated?")
+
+    assert result["answer"] == "Premium is calculated from the retrieved evidence."
+    assert result["format"] is None
+    assert result["format_valid"] is True
+    assert result["format_validation_errors"] == []

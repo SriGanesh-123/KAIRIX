@@ -18,6 +18,14 @@ class LLMGenerator(Protocol):
         """Generate a text response from a grounded prompt."""
 
 
+_STRUCTURED_OUTPUT_SYSTEM_PROMPT = (
+    "Return valid JSON only. Follow the exact JSON schema requested by the user prompt. "
+    "Do not add markdown fences or explanatory text outside the JSON object. "
+    "The requested schema may differ by investigation stage, so use the schema explicitly "
+    "provided in the current prompt rather than assuming a fixed set of keys."
+)
+
+
 class GroqGenerator:
     provider = "groq"
 
@@ -33,7 +41,7 @@ class GroqGenerator:
                 response = self.client.chat.completions.create(
                     model=self.model,
                     messages=[
-                        {"role": "system", "content": "Answer only from the supplied evidence. Return valid JSON with keys answer and evidence_ids."},
+                        {"role": "system", "content": _STRUCTURED_OUTPUT_SYSTEM_PROMPT},
                         {"role": "user", "content": prompt},
                     ],
                     temperature=0.1,

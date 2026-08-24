@@ -103,6 +103,10 @@ class RAGService:
     ) -> dict[str, Any]:
         """Run deeper evidence investigation and optionally validate a predefined format."""
         request: str | dict[str, Any] = query
+        explicit_format = output_format
+        if isinstance(query, dict) and not explicit_format:
+            explicit_format = query.get("output_format")
+
         if output_format:
             if isinstance(query, str):
                 request = {"question": query, "output_format": output_format}
@@ -118,9 +122,12 @@ class RAGService:
             max_graph_hops=max_graph_hops,
         )
 
-        requested = result["request"].get("output_format") or result["plan"].get("requested_output_format")
+        # Only an explicitly supplied format is validated. The planner may
+        # describe a natural-language response style, but that must not turn
+        # an ordinary question into an unknown predefined format error.
+        requested = str(explicit_format).strip() if explicit_format else ""
         if requested:
-            definition = self.format_registry.resolve(str(requested))
+            definition = self.format_registry.resolve(requested)
             result["format"] = {
                 "name": definition.name,
                 "description": definition.description,

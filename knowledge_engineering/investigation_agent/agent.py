@@ -562,7 +562,12 @@ class InvestigationAgent:
             raise ValueError("graph hop range must be between 1 and 4")
 
         diagnostics: list[InvestigationDiagnostic] = []
-        budget = InvestigationBudget(max_calls=self.config.max_llm_calls)
+        quota_state = getattr(self.generator, "quota_state", None)
+        budget = InvestigationBudget(
+            max_calls=self.config.max_llm_calls,
+            max_provider_attempts=getattr(self.config, "max_provider_attempts", 20),
+            max_repair_retries=self.config.max_repair_retries,
+        )
         plan = self._plan(request, diagnostics=diagnostics, budget=budget)
         base = request["question"]
         batches: list[list[dict[str, Any]]] = []
@@ -727,6 +732,7 @@ class InvestigationAgent:
             "status": status,
             "failure_code": failure_code,
             "diagnostics": [d.to_dict() for d in diagnostics],
+            "telemetry": budget.to_telemetry(quota_state),
             "provider": getattr(self.generator, "provider", "unknown"),
             "model": getattr(self.generator, "model", "unknown"),
         }

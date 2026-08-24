@@ -17,6 +17,7 @@ class InvestigationConfig:
     retrieval_limit: int = 5
     max_compact_evidence_items: int = 15
     confidence_thresholds: tuple[float, float] = (0.45, 0.75)
+    max_provider_attempts: int = 20
     provider_max_retries: int = 3
     provider_base_delay: float = 1.0
     provider_max_delay: float = 10.0

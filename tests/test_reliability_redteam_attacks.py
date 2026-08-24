@@ -377,7 +377,7 @@ def test_attack_concurrent_investigations_data_isolation() -> None:
 
     gateway = LLMGateway(
         adapter=IsolatedMockGenerator(),
-        config=LLMConfig(max_concurrent_requests=3, min_request_interval=0.0),
+        config=LLMConfig(max_concurrent_requests=3, min_request_interval=0.0, rpm_limit=120),
     )
     agent = InvestigationAgent(retriever=IsolatedMockRetriever(), generator=gateway)
 
@@ -420,7 +420,10 @@ def test_attack_concurrent_investigation_failure_isolation() -> None:
                 "verified": True,
             }), {}, {}
 
-    gateway = LLMGateway(adapter=SplitBehaviorAdapter(), config=LLMConfig(max_concurrent_requests=4))
+    gateway = LLMGateway(
+        adapter=SplitBehaviorAdapter(),
+        config=LLMConfig(max_concurrent_requests=4, min_request_interval=0.0, rpm_limit=120),
+    )
     agent = InvestigationAgent(retriever=MockEvidenceRetriever(), generator=gateway)
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:

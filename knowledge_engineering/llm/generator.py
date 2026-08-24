@@ -52,7 +52,7 @@ class GroqGenerator:
         model: str,
         max_retries: int = 3,
         base_delay: float = 1.0,
-        max_delay: float = 10.0,
+        max_delay: float = 60.0,
         timeout: float = 30.0,
     ) -> None:
         self.model = model
@@ -60,7 +60,8 @@ class GroqGenerator:
         self.base_delay = base_delay
         self.max_delay = max_delay
         self.timeout = timeout
-        self.client = Groq(api_key=api_key, timeout=timeout)
+        # max_retries=0 ensures the centralized LLMGateway owns all transport retry policies
+        self.client = Groq(api_key=api_key, timeout=timeout, max_retries=0)
 
     def call(self, prompt: str, system_prompt: str = "") -> tuple[str, dict[str, Any], dict[str, Any]]:
         """Raw API call returning content, headers, and usage."""
@@ -71,6 +72,7 @@ class GroqGenerator:
                 {"role": "user", "content": prompt},
             ],
             temperature=0.1,
+            max_tokens=2048,
             response_format={"type": "json_object"},
             timeout=self.timeout,
         )
@@ -78,7 +80,19 @@ class GroqGenerator:
         raw_headers = getattr(response, "_headers", None)
         headers = dict(raw_headers) if isinstance(raw_headers, dict) else {}
         raw_usage = getattr(response, "usage", None)
-        usage = dict(raw_usage) if isinstance(raw_usage, dict) else {}
+        if raw_usage is not None:
+            if hasattr(raw_usage, "model_dump"):
+                usage = raw_usage.model_dump()
+            elif isinstance(raw_usage, dict):
+                usage = dict(raw_usage)
+            else:
+                usage = {
+                    "prompt_tokens": getattr(raw_usage, "prompt_tokens", 0),
+                    "completion_tokens": getattr(raw_usage, "completion_tokens", 0),
+                    "total_tokens": getattr(raw_usage, "total_tokens", 0),
+                }
+        else:
+            usage = {}
         return content, headers, usage
 
     def generate(self, prompt: str) -> str:
@@ -117,7 +131,7 @@ class GeminiGenerator:
         model: str,
         max_retries: int = 3,
         base_delay: float = 1.0,
-        max_delay: float = 10.0,
+        max_delay: float = 60.0,
         timeout: float = 30.0,
     ) -> None:
         self.model = model
@@ -168,7 +182,7 @@ def create_generator(config: Any) -> LLMGateway:
     provider = config.provider.lower()
     max_retries = getattr(config, "max_retries", 3)
     base_delay = getattr(config, "base_delay", 1.0)
-    max_delay = getattr(config, "max_delay", 10.0)
+    max_delay = getattr(config, "max_delay", 60.0)
     timeout = getattr(config, "timeout", 30.0)
 
     if provider == "groq":
@@ -212,7 +226,7 @@ def generate_structured(
     last_validation_error: str = ""
 
     for attempt in range(max_repair_retries + 1):
-        if hasattr(generator, "generate") and "stage" in generator.generate.__code__.co_varnames:
+        if hasattr(generator, "generate") and "stage" in getattr(generator.generate, "__code__", object()).co_varnames:
             raw_output = generator.generate(current_prompt, stage=stage, budget=budget)
         else:
             raw_output = generator.generate(current_prompt)
@@ -222,6 +236,8 @@ def generate_structured(
         except Exception as exc:
             last_validation_error = str(exc)
             if attempt < max_repair_retries:
+                if budget is not None and not budget.record_repair():
+                    break
                 current_prompt = _build_repair_prompt(prompt, last_validation_error)
                 time.sleep(0.5)
 

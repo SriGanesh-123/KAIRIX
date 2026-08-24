@@ -469,3 +469,178 @@ def test_gateway_controlled_failure_after_exhausted_quota() -> None:
     assert res["status"] == "RATE_LIMITED"
     assert res["confidence"] == 0.0
     assert "rate limit" in res["answer"].lower()
+
+
+# ==============================================================================
+# 7. Mathematical Sliding Window RPM Limiter & Dual Budget Tests
+# ==============================================================================
+
+def test_token_bucket_pacer_sliding_window_rpm_limit() -> None:
+    """Ensure rolling 60-second window enforces RPM limit strictly."""
+    pacer = TokenBucketPacer(min_request_interval=0.0, rpm_limit=3, max_delay=60.0)
+    now = time.time()
+    # Inject 3 timestamps within the last 10 seconds
+    pacer._request_timestamps = [now - 10.0, now - 5.0, now - 1.0]
+
+    # The 4th request must wait for the oldest timestamp (now - 10.0) to exit the 60s window:
+    # 60 - 10 = ~50 seconds wait
+    with patch("time.sleep") as mock_sleep:
+        waited = pacer.acquire()
+        assert waited >= 49.0
+        assert waited <= 51.0
+        mock_sleep.assert_called_once()
+
+
+def test_token_bucket_pacer_sliding_window_eviction() -> None:
+    """Ensure timestamps older than 60s are evicted, allowing immediate execution."""
+    pacer = TokenBucketPacer(min_request_interval=0.0, rpm_limit=3, max_delay=60.0)
+    now = time.time()
+    # Inject 3 timestamps older than 60 seconds
+    pacer._request_timestamps = [now - 65.0, now - 62.0, now - 61.0]
+
+    with patch("time.sleep") as mock_sleep:
+        waited = pacer.acquire()
+        assert waited == 0.0
+        mock_sleep.assert_not_called()
+        # Old timestamps evicted, only the new one remains
+        assert len(pacer._request_timestamps) == 1
+
+
+def test_dual_budget_logical_vs_provider_http_attempts() -> None:
+    """Verify separate tracking and enforcement of logical calls vs physical HTTP attempts."""
+    budget = InvestigationBudget(
+        max_calls=5,
+        max_provider_attempts=8,
+        max_repair_retries=2,
+    )
+
+    # 1 logical call with 3 transport attempts (1 initial + 2 retries)
+    assert budget.record_call("planning") is True
+    assert budget.record_provider_attempt() is True
+    budget.record_failure()
+    budget.record_retry()
+
+    assert budget.record_provider_attempt() is True
+    budget.record_failure()
+    budget.record_retry()
+
+    assert budget.record_provider_attempt() is True
+    budget.record_success()
+
+    assert budget.calls_made == 1
+    assert budget.provider_http_attempts == 3
+    assert budget.retry_attempts == 2
+    assert budget.successful_provider_requests == 1
+    assert budget.failed_provider_requests == 2
+    assert budget.remaining() == 4
+    assert budget.remaining_provider_attempts() == 5
+
+
+def test_provider_attempt_budget_exhaustion_in_gateway() -> None:
+    """Ensure exceeding max_provider_attempts raises LLMRateLimitError."""
+    config = LLMConfig(
+        provider="mock",
+        model="mock",
+        api_key="key",
+        max_retries=3,
+        base_delay=0.01,
+        min_request_interval=0.0,
+    )
+    adapter = MockAdapter(responses=[
+        RuntimeError("500 server error"),
+        RuntimeError("500 server error"),
+        RuntimeError("500 server error"),
+    ])
+    gateway = LLMGateway(adapter=adapter, config=config)
+
+    # Budget allows only 2 physical HTTP attempts
+    budget = InvestigationBudget(max_calls=5, max_provider_attempts=2)
+
+    with pytest.raises(LLMRateLimitError) as exc_info:
+        gateway.generate("test prompt", budget=budget)
+
+    assert "attempt budget exceeded" in str(exc_info.value).lower()
+    assert budget.provider_http_attempts == 2
+
+
+def test_gateway_token_usage_telemetry_aggregation() -> None:
+    """Ensure provider token usage is aggregated into budget and telemetry."""
+    config = LLMConfig(provider="mock", model="mock", api_key="key", min_request_interval=0.0)
+
+    class UsageAdapter:
+        provider = "mock"
+        model = "mock"
+
+        def call(self, prompt: str, system_prompt: str = "") -> tuple[str, dict[str, Any], dict[str, Any]]:
+            return (
+                '{"answer": "ok"}',
+                {"x-ratelimit-remaining-requests": "20"},
+                {"prompt_tokens": 150, "completion_tokens": 50, "total_tokens": 200},
+            )
+
+    gateway = LLMGateway(adapter=UsageAdapter(), config=config)
+    budget = InvestigationBudget(max_calls=5)
+
+    gateway.generate("call 1", budget=budget)
+    gateway.generate("call 2", budget=budget)
+
+    telemetry = budget.to_telemetry(gateway.quota_state)
+    assert telemetry["logical_calls"] == 2
+    assert telemetry["provider_http_attempts"] == 2
+    assert telemetry["input_tokens"] == 300
+    assert telemetry["output_tokens"] == 100
+    assert telemetry["total_tokens"] == 400
+    assert telemetry["quota_remaining_requests"] == 20
+
+
+def test_investigation_result_contains_complete_telemetry() -> None:
+    """Ensure agent.investigate() returns structured, sanitized telemetry."""
+    config = LLMConfig(provider="mock", model="mock", api_key="key", min_request_interval=0.0)
+    adapter = MockAdapter(responses=[
+        '{"intent": "Investigate entity", "objectives": ["find"], "retrieval_queries": ["entity:default_1"]}',
+        '{"sufficient": true, "knowledge_gaps": [], "follow_up_queries": []}',
+        '{"answer": "Grounded answer text.", "evidence_ids": ["entity:default_1"], "confidence": 0.9, "knowledge_gaps": []}',
+        '{"verified": true, "answer": "Grounded answer text.", "evidence_ids": ["entity:default_1"], "confidence": 0.9, "knowledge_gaps": [], "claims": [{"claim": "fact", "supported": "YES", "evidence_id": "entity:default_1", "reason": "match"}]}',
+    ])
+    gateway = LLMGateway(adapter=adapter, config=config)
+    retriever = MockRetriever()
+
+    agent = InvestigationAgent(retriever=retriever, generator=gateway)
+    res = agent.investigate("Explain entity.")
+
+    assert "telemetry" in res
+    tel = res["telemetry"]
+    assert tel["logical_calls"] >= 4
+    assert tel["provider_http_attempts"] >= 4
+    assert tel["successful_provider_requests"] >= 4
+    assert tel["failed_provider_requests"] == 0
+    assert tel["repair_attempts"] == 0
+    assert "planning_calls" in tel
+    assert "sufficiency_calls" in tel
+    assert "answer_calls" in tel
+    assert "verification_calls" in tel
+
+
+def test_llm_config_validation_rules() -> None:
+    """Ensure LLMConfig validates parameter boundaries."""
+    with pytest.raises(ValueError, match="rpm_limit"):
+        LLMConfig(rpm_limit=0)
+
+    with pytest.raises(ValueError, match="max_retries"):
+        LLMConfig(max_retries=-1)
+
+    with pytest.raises(ValueError, match="base_delay"):
+        LLMConfig(base_delay=0.0)
+
+    with pytest.raises(ValueError, match="max_delay"):
+        LLMConfig(max_delay=-1.0)
+
+    with pytest.raises(ValueError, match="max_concurrent_requests"):
+        LLMConfig(max_concurrent_requests=0)
+
+    with pytest.raises(ValueError, match="max_calls_per_investigation"):
+        LLMConfig(max_calls_per_investigation=0)
+
+    with pytest.raises(ValueError, match="max_provider_attempts_per_investigation"):
+        LLMConfig(max_provider_attempts_per_investigation=0)
+

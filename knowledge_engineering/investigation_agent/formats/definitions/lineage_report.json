@@ -1,0 +1,10 @@
+{
+  "name": "Lineage Report",
+  "description": "Evidence-backed report describing source-to-target lineage supported by the knowledge base.",
+  "required_sections": ["answer", "lineage", "evidence", "confidence", "knowledge_gaps", "trace"],
+  "required_fields": ["answer", "evidence_ids", "confidence", "knowledge_gaps", "trace_references"],
+  "require_evidence": true,
+  "require_confidence": true,
+  "require_knowledge_gaps": true,
+  "require_trace": true
+}

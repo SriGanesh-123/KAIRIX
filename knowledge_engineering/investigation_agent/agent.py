@@ -4,7 +4,19 @@ from __future__ import annotations
 import json
 from typing import Any, Protocol
 
-from ..llm.generator import LLMGenerator, parse_generation
+from ..llm.generator import LLMGenerator, generate_structured, parse_generation
+from .contracts import (
+    GroundedAnswer,
+    InvestigationPlan,
+    SufficiencyAssessment,
+    VerificationResult,
+    _normalize_string_list,
+    extract_json_payload,
+    parse_and_validate_answer,
+    parse_and_validate_plan,
+    parse_and_validate_sufficiency,
+    parse_and_validate_verification,
+)
 
 
 class InvestigationRetriever(Protocol):
@@ -74,6 +86,12 @@ class InvestigationAgent:
                 candidate_score = float(item.get("score", 0.0) or 0.0)
                 if candidate_score > current_score:
                     merged[key] = item
+                elif candidate_score == current_score:
+                    # Merge graph evidence if existing is missing it
+                    if item.get("graph_evidence") and not existing.get("graph_evidence"):
+                        existing["graph_evidence"] = item["graph_evidence"]
+                        existing["graph_evidence_count"] = item.get("graph_evidence_count", 0)
+
         return sorted(
             merged.values(),
             key=lambda item: (
@@ -86,6 +104,44 @@ class InvestigationAgent:
     @staticmethod
     def _has_graph_support(evidence: list[dict[str, Any]]) -> bool:
         return any(int(item.get("graph_evidence_count", 0) or 0) > 0 for item in evidence)
+
+    @classmethod
+    def _compact_evidence(cls, evidence: list[dict[str, Any]], max_items: int = 15) -> list[dict[str, Any]]:
+        """Compact evidence representations to prevent token blowouts in prompt contexts."""
+        compact: list[dict[str, Any]] = []
+        for item in evidence[:max_items]:
+            source_id = cls._evidence_key(item)
+            text = str(item.get("text") or "").strip()
+            if len(text) > 400:
+                text = text[:400] + "..."
+
+            # Summarize graph paths into compact readable strings
+            graph_paths: list[str] = []
+            for path in item.get("graph_evidence", [])[:4]:
+                nodes = path.get("nodes", [])
+                rels = path.get("relationships", [])
+                if nodes and rels:
+                    node_names = [str(n.get("name") or n.get("id")) for n in nodes]
+                    rel_types = [str(r.get("relationship_type") or "RELATED_TO") for r in rels]
+                    parts = [node_names[0]]
+                    for i in range(min(len(rel_types), len(node_names) - 1)):
+                        parts.append(f"-[{rel_types[i]}]→ {node_names[i+1]}")
+                    graph_paths.append(" ".join(parts))
+
+            entry: dict[str, Any] = {
+                "evidence_id": source_id,
+                "score": item.get("score"),
+                "kind": item.get("kind"),
+                "artifact_id": item.get("artifact_id"),
+                "text": text,
+            }
+            if graph_paths:
+                entry["graph_paths"] = graph_paths
+            elif item.get("graph_evidence"):
+                entry["graph_evidence"] = item.get("graph_evidence")
+
+            compact.append(entry)
+        return compact
 
     @staticmethod
     def _normalize_request(request: str | dict[str, Any]) -> dict[str, Any]:
@@ -118,70 +174,33 @@ class InvestigationAgent:
             f"USER REQUEST:\n{json.dumps(request, ensure_ascii=False, indent=2)}"
         )
 
-    @staticmethod
-    def _parse_plan(content: str, original_question: str) -> dict[str, Any]:
-        value = json.loads(content)
-        if not isinstance(value, dict):
-            raise ValueError("investigation plan must be a JSON object")
-
-        def strings(name: str) -> list[str]:
-            raw = value.get(name, [])
-            if raw is None:
-                return []
-            if not isinstance(raw, list) or not all(isinstance(item, str) for item in raw):
-                raise ValueError(f"investigation plan field {name!r} must be a list of strings")
-            return [item.strip() for item in raw if item.strip()]
-
-        intent = value.get("intent", "").strip() if isinstance(value.get("intent", ""), str) else ""
-        output_format = value.get("requested_output_format", "")
-        if not isinstance(output_format, str):
-            output_format = str(output_format)
-        queries = strings("retrieval_queries")
-        if not queries:
-            queries = [original_question]
-        return {
-            "intent": intent or "Investigate the supplied request using available evidence.",
-            "objectives": strings("objectives"),
-            "retrieval_queries": queries,
-            "evidence_requirements": strings("evidence_requirements"),
-            "requested_output_format": output_format.strip(),
-            "constraints": strings("constraints"),
-        }
-
-    def _plan(self, request: dict[str, Any]) -> dict[str, Any]:
+    def _plan(self, request: dict[str, Any]) -> InvestigationPlan:
+        prompt = self._build_plan_prompt(request)
         try:
-            return self._parse_plan(
-                self.planner.generate(self._build_plan_prompt(request)),
-                request["question"],
+            return generate_structured(
+                self.planner,
+                prompt,
+                lambda content: parse_and_validate_plan(content, request["question"]),
+                max_repair_retries=1,
             )
         except Exception:
-            return {
-                "intent": "Investigate the supplied request using available evidence.",
-                "objectives": [],
-                "retrieval_queries": [request["question"]],
-                "evidence_requirements": [],
-                "requested_output_format": str(request.get("output_format", "")),
-                "constraints": [],
-            }
+            return InvestigationPlan(
+                intent="Investigate the supplied request using available evidence.",
+                objectives=[],
+                retrieval_queries=[request["question"]],
+                evidence_requirements=[],
+                requested_output_format=str(request.get("output_format", "")),
+                constraints=[],
+            )
 
-    @staticmethod
+    @classmethod
     def _build_sufficiency_prompt(
+        cls,
         query: str,
         plan: dict[str, Any],
         evidence: list[dict[str, Any]],
     ) -> str:
-        compact = [
-            {
-                "evidence_id": str(item.get("source_id") or item.get("id")),
-                "score": item.get("score"),
-                "kind": item.get("kind"),
-                "artifact_id": item.get("artifact_id"),
-                "text": item.get("text"),
-                "metadata": item.get("metadata", {}),
-                "graph_evidence": item.get("graph_evidence", []),
-            }
-            for item in evidence
-        ]
+        compact = cls._compact_evidence(evidence)
         return (
             "You are the evidence-sufficiency component of a domain-neutral investigation agent.\n"
             "Decide whether the supplied evidence actually answers the user's requested intent.\n"
@@ -196,64 +215,45 @@ class InvestigationAgent:
             f"RETRIEVED EVIDENCE:\n{json.dumps(compact, ensure_ascii=False, indent=2)}"
         )
 
-    @staticmethod
-    def _parse_sufficiency(content: str) -> dict[str, Any]:
-        value = json.loads(content)
-        if not isinstance(value, dict):
-            raise ValueError("evidence sufficiency response must be a JSON object")
-        sufficient = value.get("sufficient")
-        if not isinstance(sufficient, bool):
-            raise ValueError("sufficient must be a boolean")
-        gaps = value.get("knowledge_gaps", [])
-        if not isinstance(gaps, list):
-            gaps = [str(gaps)]
-        queries = value.get("follow_up_queries", [])
-        if not isinstance(queries, list):
-            queries = [str(queries)]
-        return {
-            "sufficient": sufficient,
-            "knowledge_gaps": [str(item).strip() for item in gaps if str(item).strip()],
-            "follow_up_queries": [str(item).strip() for item in queries if str(item).strip()],
-        }
-
     def _assess_sufficiency(
         self,
         query: str,
-        plan: dict[str, Any],
+        plan: InvestigationPlan,
         evidence: list[dict[str, Any]],
-    ) -> dict[str, Any]:
+    ) -> SufficiencyAssessment:
+        if not evidence:
+            return SufficiencyAssessment(
+                sufficient=False,
+                knowledge_gaps=["No initial evidence was retrieved."],
+                follow_up_queries=list(plan.retrieval_queries),
+            )
+        prompt = self._build_sufficiency_prompt(query, plan.to_dict(), evidence)
         try:
-            return self._parse_sufficiency(
-                self.planner.generate(self._build_sufficiency_prompt(query, plan, evidence))
+            return generate_structured(
+                self.planner,
+                prompt,
+                parse_and_validate_sufficiency,
+                max_repair_retries=1,
             )
         except Exception:
-            return {
-                "sufficient": bool(evidence) and self._has_graph_support(evidence),
-                "knowledge_gaps": [] if evidence and self._has_graph_support(evidence) else [
+            has_graph = self._has_graph_support(evidence)
+            return SufficiencyAssessment(
+                sufficient=bool(evidence) and has_graph,
+                knowledge_gaps=[] if evidence and has_graph else [
                     "Initial retrieval did not provide sufficient graph-backed evidence."
                 ],
-                "follow_up_queries": [],
-            }
+                follow_up_queries=list(plan.retrieval_queries) if not has_graph else [],
+            )
 
-    @staticmethod
+    @classmethod
     def _build_answer_prompt(
+        cls,
         query: str,
         evidence: list[dict[str, Any]],
         plan: dict[str, Any],
         knowledge_gaps: list[str],
     ) -> str:
-        compact = [
-            {
-                "evidence_id": str(item.get("source_id") or item.get("id")),
-                "score": item.get("score"),
-                "kind": item.get("kind"),
-                "artifact_id": item.get("artifact_id"),
-                "text": item.get("text"),
-                "metadata": item.get("metadata", {}),
-                "graph_evidence": item.get("graph_evidence", []),
-            }
-            for item in evidence
-        ]
+        compact = cls._compact_evidence(evidence)
         return (
             "You are the KAIRIX investigation answerer.\n"
             "Produce a precise, useful, evidence-grounded answer to the user's request.\n"
@@ -274,23 +274,52 @@ class InvestigationAgent:
             f"INVESTIGATION EVIDENCE:\n{json.dumps(compact, ensure_ascii=False, indent=2)}"
         )
 
-    @staticmethod
+    def _generate_answer(
+        self,
+        query: str,
+        evidence: list[dict[str, Any]],
+        plan: InvestigationPlan,
+        knowledge_gaps: list[str],
+        allowed: set[str],
+    ) -> GroundedAnswer:
+        if not evidence:
+            return GroundedAnswer(
+                answer="The investigation could not find any evidence matching the query in the knowledge base.",
+                evidence_ids=[],
+                confidence=0.0,
+                knowledge_gaps=["No evidence was retrieved for the requested query."],
+            )
+        prompt = self._build_answer_prompt(query, evidence, plan.to_dict(), knowledge_gaps)
+        try:
+            return generate_structured(
+                self.generator,
+                prompt,
+                lambda content: parse_and_validate_answer(content, allowed),
+                max_repair_retries=1,
+            )
+        except Exception as exc:
+            err_msg = str(exc)
+            diagnostic = "The answer-generation step did not return a valid structured result."
+            if "Rate limit" in err_msg or "rate_limit_exceeded" in err_msg:
+                diagnostic = "Provider rate limit reached during answer generation."
+            elif "Request too large" in err_msg:
+                diagnostic = "Prompt context exceeded model request size limits."
+
+            return GroundedAnswer(
+                answer="The investigation could not produce a valid grounded answer from the supplied evidence.",
+                evidence_ids=[],
+                confidence=0.0,
+                knowledge_gaps=[diagnostic],
+            )
+
+    @classmethod
     def _build_verification_prompt(
+        cls,
         query: str,
         draft: dict[str, Any],
         evidence: list[dict[str, Any]],
     ) -> str:
-        compact = [
-            {
-                "evidence_id": str(item.get("source_id") or item.get("id")),
-                "text": item.get("text"),
-                "kind": item.get("kind"),
-                "artifact_id": item.get("artifact_id"),
-                "metadata": item.get("metadata", {}),
-                "graph_evidence": item.get("graph_evidence", []),
-            }
-            for item in evidence
-        ]
+        compact = cls._compact_evidence(evidence)
         return (
             "You are the final evidence verifier for a domain-neutral investigation agent.\n"
             "Review the draft answer against the supplied evidence only.\n"
@@ -306,62 +335,37 @@ class InvestigationAgent:
             f"SUPPLIED EVIDENCE:\n{json.dumps(compact, ensure_ascii=False, indent=2)}"
         )
 
-    @classmethod
-    def _parse_answer(cls, content: str, allowed: set[str]) -> dict[str, Any]:
-        generated = parse_generation(content)
-        value = json.loads(content)
-        raw_confidence = value.get("confidence", 0.0)
-        try:
-            confidence = max(0.0, min(1.0, float(raw_confidence)))
-        except (TypeError, ValueError):
-            confidence = 0.0
-        gaps = value.get("knowledge_gaps", [])
-        if not isinstance(gaps, list):
-            gaps = [str(gaps)]
-        gaps = list(dict.fromkeys(str(item).strip() for item in gaps if str(item).strip()))
-        cited = list(dict.fromkeys(item for item in generated["evidence_ids"] if item in allowed))
-        return {
-            "answer": generated["answer"],
-            "evidence_ids": cited,
-            "confidence": confidence,
-            "knowledge_gaps": gaps,
-        }
-
     def _verify_answer(
         self,
         query: str,
-        draft: dict[str, Any],
+        draft: GroundedAnswer,
         evidence: list[dict[str, Any]],
-    ) -> dict[str, Any]:
-        allowed = {self._evidence_key(item) for item in evidence}
-        try:
-            value = json.loads(
-                self.planner.generate(self._build_verification_prompt(query, draft, evidence))
+        allowed: set[str],
+    ) -> VerificationResult:
+        if not evidence or not draft.answer or (draft.confidence == 0.0 and not draft.evidence_ids):
+            return VerificationResult(
+                verified=False,
+                answer=draft.answer,
+                evidence_ids=draft.evidence_ids,
+                confidence=draft.confidence,
+                knowledge_gaps=draft.knowledge_gaps,
             )
-            if not isinstance(value, dict) or not isinstance(value.get("verified"), bool):
-                raise ValueError("invalid verification response")
-            verified = bool(value["verified"])
-            answer = str(value.get("answer", draft["answer"])).strip()
-            cited = [item for item in value.get("evidence_ids", []) if item in allowed]
-            gaps = value.get("knowledge_gaps", draft["knowledge_gaps"])
-            if not isinstance(gaps, list):
-                gaps = [str(gaps)]
-            try:
-                confidence = max(0.0, min(1.0, float(value.get("confidence", draft["confidence"]))))
-            except (TypeError, ValueError):
-                confidence = draft["confidence"]
-            return {
-                "answer": answer or draft["answer"],
-                "evidence_ids": list(dict.fromkeys(cited)),
-                "confidence": confidence,
-                "knowledge_gaps": list(dict.fromkeys(str(item).strip() for item in gaps if str(item).strip())),
-                "verified": verified,
-            }
+        prompt = self._build_verification_prompt(query, draft.to_dict(), evidence)
+        try:
+            return generate_structured(
+                self.planner,
+                prompt,
+                lambda content: parse_and_validate_verification(content, draft, allowed),
+                max_repair_retries=1,
+            )
         except Exception:
-            return {
-                **draft,
-                "verified": False,
-            }
+            return VerificationResult(
+                verified=False,
+                answer=draft.answer,
+                evidence_ids=draft.evidence_ids,
+                confidence=draft.confidence,
+                knowledge_gaps=draft.knowledge_gaps,
+            )
 
     def _confidence_level(self, confidence: float) -> str:
         low, high = self.confidence_thresholds
@@ -402,10 +406,10 @@ class InvestigationAgent:
         )
 
         assessment = self._assess_sufficiency(base, plan, first)
-        investigation_gaps = list(assessment["knowledge_gaps"])
-        follow_up_queries = assessment["follow_up_queries"] or plan["retrieval_queries"]
+        investigation_gaps = list(assessment.knowledge_gaps)
+        follow_up_queries = assessment.follow_up_queries or plan.retrieval_queries
 
-        if not assessment["sufficient"]:
+        if not assessment.sufficient:
             follow_up_hops = min(max_graph_hops, initial_graph_hops + 1)
             seen_queries = {base}
             for follow_up in follow_up_queries:
@@ -413,42 +417,33 @@ class InvestigationAgent:
                 if not follow_up or follow_up in seen_queries:
                     continue
                 seen_queries.add(follow_up)
-                evidence = self.retriever.search(
-                    follow_up,
-                    limit=limit,
-                    graph_hops=follow_up_hops,
-                )
-                batches.append(evidence)
-                steps.append(
-                    {
-                        "query": follow_up,
-                        "graph_hops": follow_up_hops,
-                        "retrieved_count": len(evidence),
-                        "evidence_ids": [self._evidence_key(item) for item in evidence],
-                    }
-                )
+                try:
+                    evidence = self.retriever.search(
+                        follow_up,
+                        limit=limit,
+                        graph_hops=follow_up_hops,
+                    )
+                    batches.append(evidence)
+                    steps.append(
+                        {
+                            "query": follow_up,
+                            "graph_hops": follow_up_hops,
+                            "retrieved_count": len(evidence),
+                            "evidence_ids": [self._evidence_key(item) for item in evidence],
+                        }
+                    )
+                except Exception:
+                    continue
 
         evidence = self._merge_evidence(batches)
         allowed = {self._evidence_key(item) for item in evidence}
-        try:
-            generated = self._parse_answer(
-                self.generator.generate(
-                    self._build_answer_prompt(base, evidence, plan, investigation_gaps)
-                ),
-                allowed,
-            )
-        except Exception:
-            generated = {
-                "answer": "The investigation could not produce a valid grounded answer from the supplied evidence.",
-                "evidence_ids": [],
-                "confidence": 0.0,
-                "knowledge_gaps": ["The answer-generation step did not return a valid structured result."],
-            }
 
-        verified = self._verify_answer(base, generated, evidence)
+        generated = self._generate_answer(base, evidence, plan, investigation_gaps, allowed)
+        verified = self._verify_answer(base, generated, evidence, allowed)
+
         evidence_by_id = {self._evidence_key(item): item for item in evidence}
-        combined_gaps = list(dict.fromkeys(investigation_gaps + verified["knowledge_gaps"]))
-        if not verified["evidence_ids"]:
+        combined_gaps = _normalize_string_list(investigation_gaps + verified.knowledge_gaps)
+        if not verified.evidence_ids:
             combined_gaps.append("No retrieved evidence was cited by the answer generator or verifier.")
 
         trace_references = [
@@ -464,18 +459,18 @@ class InvestigationAgent:
         return {
             "query": base,
             "request": request,
-            "plan": plan,
-            "answer": verified["answer"],
-            "evidence_ids": verified["evidence_ids"],
-            "evidence": [evidence_by_id[item] for item in verified["evidence_ids"]],
+            "plan": plan.to_dict(),
+            "answer": verified.answer,
+            "evidence_ids": verified.evidence_ids,
+            "evidence": [evidence_by_id[item] for item in verified.evidence_ids if item in evidence_by_id],
             "retrieved_count": len(evidence),
             "investigation_triggered": len(steps) > 1,
             "steps": steps,
             "trace_references": trace_references,
             "knowledge_gaps": combined_gaps,
-            "confidence": verified["confidence"],
-            "confidence_level": self._confidence_level(verified["confidence"]),
-            "answer_verified": verified["verified"],
+            "confidence": verified.confidence,
+            "confidence_level": self._confidence_level(verified.confidence),
+            "answer_verified": verified.verified,
             "provider": getattr(self.generator, "provider", "unknown"),
             "model": getattr(self.generator, "model", "unknown"),
         }

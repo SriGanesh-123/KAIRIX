@@ -140,37 +140,45 @@ class VerificationResult:
         return asdict(self)
 
 
-def extract_json_payload(content: str) -> dict[str, Any]:
+def extract_json_payload(content: Any) -> dict[str, Any]:
     """Extract a JSON object from arbitrary LLM text output.
 
-    Handles markdown fences (```json ... ```), preamble/postscript text,
-    and common unicode quotation variations.
+    Handles dict pass-through, markdown fences (```json ... ```), preamble/postscript text,
+    unicode smart quotes, and trailing commas.
     """
+    if isinstance(content, dict):
+        return content
     if not isinstance(content, str):
-        raise ValueError("LLM response content must be a string")
+        raise ValueError("LLM response content must be a string or dictionary")
 
     text = content.strip()
     if not text:
         raise ValueError("LLM returned an empty response")
+
+    # Normalize unicode quotation marks
+    text = text.replace("“", "\"").replace("”", "\"").replace("‘", "'").replace("’", "'")
 
     # Strip markdown code blocks if present
     match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", text, re.IGNORECASE)
     if match:
         text = match.group(1).strip()
 
+    # Clean up trailing commas in objects and arrays
+    cleaned_text = re.sub(r",\s*([\]}])", r"\1", text)
+
     # Try direct parse
     try:
-        data = json.loads(text)
+        data = json.loads(cleaned_text)
         if isinstance(data, dict):
             return data
     except json.JSONDecodeError:
         pass
 
     # Find the outermost balanced JSON object {...}
-    start = text.find("{")
-    end = text.rfind("}")
+    start = cleaned_text.find("{")
+    end = cleaned_text.rfind("}")
     if start != -1 and end != -1 and end > start:
-        candidate = text[start : end + 1]
+        candidate = cleaned_text[start : end + 1]
         try:
             data = json.loads(candidate)
             if isinstance(data, dict):

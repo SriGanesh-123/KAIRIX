@@ -325,16 +325,16 @@ class InvestigationAgent:
                 max_repair_retries=1,
             )
         except Exception as exc:
-            err_msg = str(exc)
+            err_msg = str(exc).lower()
             diagnostic_msg = "The answer-generation step did not return a valid structured result."
             err_code = InvestigationErrorCode.LLM_SCHEMA_ERROR
-            if "Rate limit" in err_msg or "rate_limit_exceeded" in err_msg:
+            if "rate limit" in err_msg or "rate_limit_exceeded" in err_msg or "429" in err_msg:
                 diagnostic_msg = "Provider rate limit reached during answer generation."
                 err_code = InvestigationErrorCode.LLM_ERROR
-            elif "Request too large" in err_msg:
+            elif "request too large" in err_msg or "413" in err_msg:
                 diagnostic_msg = "Prompt context exceeded model request size limits."
                 err_code = InvestigationErrorCode.LLM_ERROR
-            elif "timed out" in err_msg.lower() or "timeout" in err_msg.lower():
+            elif "timed out" in err_msg or "timeout" in err_msg:
                 diagnostic_msg = "Provider request timed out during answer generation."
                 err_code = InvestigationErrorCode.TIMEOUT_ERROR
 

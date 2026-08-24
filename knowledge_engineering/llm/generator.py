@@ -39,7 +39,7 @@ def _build_repair_prompt(prompt: str, error_message: str) -> str:
 class GroqGenerator:
     provider = "groq"
 
-    def __init__(self, api_key: str, model: str, max_retries: int = 1) -> None:
+    def __init__(self, api_key: str, model: str, max_retries: int = 3) -> None:
         self.model = model
         self.max_retries = max_retries
         self.client = Groq(api_key=api_key)
@@ -71,7 +71,7 @@ class GroqGenerator:
 class GeminiGenerator:
     provider = "gemini"
 
-    def __init__(self, api_key: str, model: str, max_retries: int = 1) -> None:
+    def __init__(self, api_key: str, model: str, max_retries: int = 3) -> None:
         self.model = model
         self.max_retries = max_retries
         self.client = genai.Client(api_key=api_key)

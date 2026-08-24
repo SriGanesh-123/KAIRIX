@@ -99,6 +99,22 @@ def extract_retry_after(exc: Exception) -> float | None:
 
     # 2. Try regex extraction from string representation
     text = str(exc)
+    ms_match = re.search(r"(?:try again in|retry after|retry in|wait)\s+([\d\.]+)\s*ms", text, re.IGNORECASE)
+    if ms_match:
+        try:
+            return float(ms_match.group(1)) / 1000.0
+        except (ValueError, TypeError):
+            pass
+
+    min_sec_match = re.search(r"(?:try again in|retry after|retry in|wait)\s+([\d\.]+)m\s*([\d\.]*)s?", text, re.IGNORECASE)
+    if min_sec_match:
+        try:
+            mins = float(min_sec_match.group(1))
+            secs = float(min_sec_match.group(2)) if min_sec_match.group(2) else 0.0
+            return mins * 60.0 + secs
+        except (ValueError, TypeError):
+            pass
+
     patterns = [
         r"(?:try again in|retry after|retry in|wait)\s+([\d\.]+)\s*(?:s|sec|seconds)?",
         r"([\d\.]+)\s*s(?:econds?)?\s+(?:remaining|before)",

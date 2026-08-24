@@ -7,9 +7,9 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class LLMConfig:
-    provider: str
-    model: str
-    api_key: str
+    provider: str = "groq"
+    model: str = "default-model"
+    api_key: str = "default-key"
     max_retries: int = 3
     base_delay: float = 1.0
     max_delay: float = 10.0
@@ -17,6 +17,7 @@ class LLMConfig:
     rpm_limit: int = 30
     min_request_interval: float = 1.5
     max_concurrent_requests: int = 2
+    max_calls_per_investigation: int = 12
     enable_quota_tracking: bool = True
 
     @classmethod

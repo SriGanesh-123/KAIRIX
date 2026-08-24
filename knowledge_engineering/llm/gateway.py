@@ -104,10 +104,11 @@ class QuotaState:
             pass
         return None
 
-    def set_cooldown(self, seconds: float) -> None:
+    def set_cooldown(self, seconds: float, max_seconds: float = 60.0) -> None:
         with self._lock:
             now = time.time()
-            self.cooldown_until = max(self.cooldown_until, now + max(0.0, seconds))
+            capped = min(max_seconds, max(0.0, seconds))
+            self.cooldown_until = max(self.cooldown_until, now + capped)
 
     def get_cooldown_remaining(self) -> float:
         with self._lock:
@@ -128,9 +129,15 @@ class QuotaState:
 class TokenBucketPacer:
     """Thread-safe pacer to smooth outbound request bursts and honor quotas."""
 
-    def __init__(self, min_request_interval: float = 1.5, rpm_limit: int = 30) -> None:
+    def __init__(
+        self,
+        min_request_interval: float = 1.5,
+        rpm_limit: int = 30,
+        max_delay: float = 60.0,
+    ) -> None:
         self.min_request_interval = max(0.0, min_request_interval)
         self.rpm_limit = max(1, rpm_limit)
+        self.max_delay = max(0.01, max_delay)
         self._last_request_time: float = 0.0
         self._lock = threading.Lock()
 
@@ -140,11 +147,11 @@ class TokenBucketPacer:
         with self._lock:
             now = time.time()
 
-            # 1. Respect active cooldown (e.g. from prior 429)
+            # 1. Respect active cooldown (e.g. from prior 429), capped at self.max_delay
             if quota_state is not None:
                 cooldown = quota_state.get_cooldown_remaining()
                 if cooldown > 0.0:
-                    wait_time = max(wait_time, cooldown)
+                    wait_time = max(wait_time, min(self.max_delay, cooldown))
 
                 # If remaining tokens is completely exhausted (0), pause briefly for token reset
                 if quota_state.remaining_tokens is not None and quota_state.remaining_tokens <= 0:
@@ -171,6 +178,8 @@ class InvestigationBudget:
     """Tracks and limits LLM calls during an investigation lifecycle."""
     max_calls: int = 10
     calls_made: int = 0
+    max_repair_retries: int = 1
+    repairs_made: int = 0
     stage_breakdown: dict[str, int] = field(default_factory=dict)
     _lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
 
@@ -183,6 +192,14 @@ class InvestigationBudget:
             self.stage_breakdown[stage] = self.stage_breakdown.get(stage, 0) + 1
             return True
 
+    def record_repair(self) -> bool:
+        """Record a schema repair retry attempt. Returns True if within budget, False if exceeded."""
+        with self._lock:
+            if self.repairs_made >= self.max_repair_retries:
+                return False
+            self.repairs_made += 1
+            return True
+
     def remaining(self) -> int:
         with self._lock:
             return max(0, self.max_calls - self.calls_made)
@@ -192,6 +209,8 @@ class InvestigationBudget:
             return {
                 "max_calls": self.max_calls,
                 "calls_made": self.calls_made,
+                "max_repair_retries": self.max_repair_retries,
+                "repairs_made": self.repairs_made,
                 "remaining": max(0, self.max_calls - self.calls_made),
                 "stage_breakdown": dict(self.stage_breakdown),
             }
@@ -227,6 +246,7 @@ class LLMGateway:
         self.pacer = TokenBucketPacer(
             min_request_interval=self.config.min_request_interval,
             rpm_limit=self.config.rpm_limit,
+            max_delay=self.config.max_delay,
         )
         self.semaphore = threading.Semaphore(self.config.max_concurrent_requests)
 
@@ -271,7 +291,10 @@ class LLMGateway:
                             self.quota_state.update_from_headers(headers)
                     else:
                         # Fallback for plain generator objects
-                        content = self.adapter.generate(prompt)
+                        if hasattr(self.adapter, "generate") and "stage" in getattr(self.adapter.generate, "__code__", object()).co_varnames:
+                            content = self.adapter.generate(prompt, stage=stage, budget=budget)
+                        else:
+                            content = self.adapter.generate(prompt)
 
                     if not content:
                         raise LLMEmptyResponseError(

@@ -667,6 +667,7 @@ class InvestigationAgent:
         auth_diag = next((d for d in diagnostics if d.code == InvestigationErrorCode.LLM_AUTH_ERROR), None)
         server_diag = next((d for d in diagnostics if d.code == InvestigationErrorCode.LLM_SERVER_ERROR), None)
         timeout_diag = next((d for d in diagnostics if d.code == InvestigationErrorCode.LLM_TIMEOUT), None)
+        llm_err_diag = next((d for d in diagnostics if d.code == InvestigationErrorCode.LLM_ERROR and not d.recoverable), None)
         retrieval_diag = next((d for d in diagnostics if d.code == InvestigationErrorCode.RETRIEVAL_ERROR and not d.recoverable), None)
 
         if rate_limit_diag:
@@ -681,6 +682,9 @@ class InvestigationAgent:
         elif timeout_diag:
             status = "TIMEOUT"
             failure_code = InvestigationErrorCode.LLM_TIMEOUT.value
+        elif llm_err_diag:
+            status = "PROVIDER_ERROR"
+            failure_code = InvestigationErrorCode.LLM_ERROR.value
         elif retrieval_diag and not evidence:
             status = "RETRIEVAL_ERROR"
             failure_code = InvestigationErrorCode.RETRIEVAL_ERROR.value

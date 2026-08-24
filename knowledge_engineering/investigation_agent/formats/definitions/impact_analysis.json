@@ -1,0 +1,10 @@
+{
+  "name": "Impact Analysis",
+  "description": "Evidence-backed analysis of affected entities, relationships, and documented gaps.",
+  "required_sections": ["answer", "impact", "evidence", "confidence", "knowledge_gaps", "trace"],
+  "required_fields": ["answer", "evidence_ids", "confidence", "knowledge_gaps", "trace_references"],
+  "require_evidence": true,
+  "require_confidence": true,
+  "require_knowledge_gaps": true,
+  "require_trace": true
+}

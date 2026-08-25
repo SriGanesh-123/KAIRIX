@@ -41,5 +41,33 @@ def index_canonical(enrichment_path: Path = DEFAULT_ENRICHMENT) -> Dict[str, Any
     }
 
 
+def index_single_artifact(
+    canonical_data: Dict[str, Any],
+    artifact_id: str,
+    retriever: VectorRetriever | None = None,
+) -> Dict[str, Any]:
+    """Index or update only the chunks belonging to one specific artifact in Qdrant."""
+    chunks = KnowledgeChunker().build_artifact_chunks(canonical_data, artifact_id)
+    owns_retriever = retriever is None
+    r = retriever or VectorRetriever()
+    if owns_retriever:
+        r.connect()
+    try:
+        indexed = r.index_artifact(artifact_id, chunks)
+        count = r.store.count()
+    finally:
+        if owns_retriever:
+            r.close()
+    return {
+        "collection": r.store.collection_name,
+        "artifact_id": artifact_id,
+        "chunks_built": len(chunks),
+        "chunks_indexed": indexed,
+        "collection_count": count,
+        "embedding_model": r.embedder.model_name,
+        "embedding_dimension": r.embedder.dimension,
+    }
+
+
 if __name__ == "__main__":
     print(json.dumps(index_canonical(), indent=2))

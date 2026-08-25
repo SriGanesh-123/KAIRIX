@@ -19,12 +19,9 @@ from sqlglot.errors import ParseError
 # 1. CONFIGURATION
 # ============================================================
 
-INPUT_FOLDER = Path(
-    r"C:\Users\GaneshSriKumarMarimu\legacy-code-agentic-rag\source\sql"
-)
-OUTPUT_FOLDER = Path(
-    r"C:\Users\GaneshSriKumarMarimu\legacy-code-agentic-rag\output\sql"
-)
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+INPUT_FOLDER = PROJECT_ROOT / "source" / "sql"
+OUTPUT_FOLDER = PROJECT_ROOT / "output" / "sql"
 OUTPUT_FOLDER.mkdir(parents=True, exist_ok=True)
 
 
@@ -1584,10 +1581,11 @@ def parse_file(file_path):
 # 22. SAVE JSON
 # ============================================================
 
-def save_metadata(metadata, sql_file):
-
+def save_metadata(metadata, sql_file, output_dir=None):
+    out_dir = Path(output_dir) if output_dir else OUTPUT_FOLDER
+    out_dir.mkdir(parents=True, exist_ok=True)
     output_file = (
-        OUTPUT_FOLDER /
+        out_dir /
         f"{sql_file.stem}_metadata.json"
     )
 
@@ -1604,6 +1602,19 @@ def save_metadata(metadata, sql_file):
         )
 
     return output_file
+
+
+def parse_single_file(source_path: str | Path, output_dir: Path | None = None) -> dict:
+    """Parse exactly one SQL source file and persist its metadata."""
+    p = Path(source_path)
+    if not p.is_absolute():
+        p = (PROJECT_ROOT / p).resolve()
+    if not p.exists() or not p.is_file():
+        raise FileNotFoundError(f"SQL source file not found: {p}")
+
+    metadata = parse_file(p)
+    save_metadata(metadata, p, output_dir=output_dir)
+    return metadata
 
 
 # ============================================================
@@ -1760,6 +1771,23 @@ def print_result(
 # ============================================================
 
 def main():
+    import argparse
+    import sys
+    parser = argparse.ArgumentParser(description="SQL Parser (Single-File & Batch)")
+    parser.add_argument("--file", type=str, default="", help="Path to a single SQL file to parse")
+    args = parser.parse_args()
+
+    if args.file:
+        file_path = Path(args.file)
+        try:
+            metadata = parse_single_file(file_path)
+            output_file = OUTPUT_FOLDER / f"{file_path.stem}_metadata.json"
+            print(f"Parsing: {file_path.name}")
+            print_result(metadata, output_file)
+        except Exception as error:
+            print(f"ERROR parsing {file_path.name}: {error}")
+            sys.exit(1)
+        return
 
     sql_files = sorted(
         INPUT_FOLDER.glob("*.sql")

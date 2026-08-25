@@ -1,5 +1,6 @@
 import os
 import json
+from pathlib import Path
 import xml.etree.ElementTree as ET
 
 
@@ -974,11 +975,77 @@ def parse_dtsx(
         return False
 
 
+def parse_single_file(source_path: str | Path, output_dir: str | Path | None = None) -> dict:
+    """Parse exactly one SSIS DTSX package and persist its metadata."""
+    from pathlib import Path
+    p = Path(source_path)
+    if not p.is_absolute():
+        p = (Path(PROJECT_ROOT) / p).resolve()
+    if not p.exists() or not p.is_file():
+        raise FileNotFoundError(f"SSIS package file not found: {p}")
+
+    out_dir = str(output_dir) if output_dir else OUTPUT_DIR
+    os.makedirs(out_dir, exist_ok=True)
+
+    metadata = {
+        "metadata_version": "1.0",
+        "source_type": "SSIS DTSX",
+        "source_directory": str(p.parent),
+        "packages": [],
+        "tasks": [],
+        "components": [],
+        "component_properties": [],
+        "connections": [],
+        "sql": [],
+        "variables": [],
+        "precedence": [],
+        "package_links": [],
+        "relationships": []
+    }
+
+    success = parse_dtsx(str(p), metadata)
+    if not success:
+        raise RuntimeError(f"Failed to parse SSIS DTSX package: {p}")
+
+    package_output_file = os.path.join(
+        out_dir,
+        f"{os.path.splitext(p.name)[0]}_metadata.json"
+    )
+
+    with open(package_output_file, "w", encoding="utf-8") as file:
+        json.dump(metadata, file, indent=2, ensure_ascii=False)
+
+    return metadata
+
+
 # ============================================================
 # MAIN
 # ============================================================
 
 def main():
+    import argparse
+    import sys
+    from pathlib import Path
+
+    parser = argparse.ArgumentParser(description="SSIS DTSX Parser (Single-File & Batch)")
+    parser.add_argument("--file", type=str, default="", help="Path to a single DTSX file to parse")
+    args = parser.parse_args()
+
+    if args.file:
+        file_path = Path(args.file)
+        try:
+            metadata = parse_single_file(file_path)
+            print(f"SUCCESS: {file_path.name}")
+            print(f"  Packages: {len(metadata.get('packages', []))}")
+            print(f"  Tasks: {len(metadata.get('tasks', []))}")
+            print(f"  Components: {len(metadata.get('components', []))}")
+            print(f"  Connections: {len(metadata.get('connections', []))}")
+            print(f"  Relationships: {len(metadata.get('relationships', []))}")
+        except Exception as error:
+            print(f"FAILED: {file_path.name}")
+            print(f"{type(error).__name__}: {error}")
+            sys.exit(1)
+        return
 
     print("=" * 70)
     print("SSIS COMPLETE METADATA PARSER")

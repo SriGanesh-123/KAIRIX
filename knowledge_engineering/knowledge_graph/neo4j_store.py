@@ -108,6 +108,32 @@ class Neo4jKnowledgeGraphStore:
             session.execute_write(self._write_edges, edges)
         return self.counts()
 
+    def write_artifact_graph(self, artifact_id: str, graph: Dict[str, Any]) -> Dict[str, int]:
+        """Update nodes and relationships scoped strictly to one artifact."""
+        self._require_connection()
+        nodes = [
+            _node_for_neo4j(node)
+            for node in graph.get("nodes", [])
+            if node.get("artifact_id") == artifact_id
+        ]
+        edges = [
+            _edge_for_neo4j(edge, index)
+            for index, edge in enumerate(graph.get("edges", []))
+            if edge.get("artifact_id") == artifact_id
+            or edge.get("source_artifact_id") == artifact_id
+        ]
+        with self._driver.session(database=self.database) as session:
+            # Delete only relationships owned by this artifact
+            session.run(
+                "MATCH ()-[r:KG_RELATIONSHIP {artifact_id: $artifact_id}]->() DELETE r",
+                artifact_id=str(artifact_id),
+            )
+            if nodes:
+                session.execute_write(self._write_nodes, nodes)
+            if edges:
+                session.execute_write(self._write_edges, edges)
+        return self.counts()
+
     @staticmethod
     def _write_nodes(tx: Any, nodes: Iterable[Dict[str, Any]]) -> None:
         query = """

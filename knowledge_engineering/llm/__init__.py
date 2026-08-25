@@ -29,6 +29,7 @@ from .generator import (
     generate_structured,
     parse_generation,
 )
+from .nim import NIMGenerator, NIMReviewer
 
 __all__ = [
     "LLMConfig",
@@ -50,6 +51,8 @@ __all__ = [
     "LLMGenerator",
     "GroqGenerator",
     "GeminiGenerator",
+    "NIMGenerator",
+    "NIMReviewer",
     "create_generator",
     "generate_structured",
     "parse_generation",

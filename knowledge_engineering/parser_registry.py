@@ -77,12 +77,14 @@ def select_parsers(artifacts: list[dict[str, Any]]) -> list[dict[str, Any]]:
         artifact_id = artifact.get("id")
         file_name = artifact.get("file_name")
         source_type = artifact.get("source_type")
+        source_path = artifact.get("path")
         try:
-            spec = select_parser(source_type=source_type, file_name=file_name)
+            spec = select_parser(source_type=source_type, file_name=file_name or source_path)
             selections.append(
                 {
                     "artifact_id": artifact_id,
                     "file_name": file_name,
+                    "source_path": source_path,
                     "source_type": source_type,
                     "parser": spec.name,
                     "entrypoint": spec.entrypoint,
@@ -95,6 +97,7 @@ def select_parsers(artifacts: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 {
                     "artifact_id": artifact_id,
                     "file_name": file_name,
+                    "source_path": source_path,
                     "source_type": source_type,
                     "parser": None,
                     "entrypoint": None,

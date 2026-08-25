@@ -127,8 +127,10 @@ def parse_one(file_path: Path) -> dict:
     return metadata
 
 
-def write_atomic(file_path: Path, metadata: dict) -> Path:
-    output = OUTPUT_DIR / f"{file_path.stem}_metadata.json"
+def write_atomic(file_path: Path, metadata: dict, output_dir: Path | None = None) -> Path:
+    out_dir = output_dir or OUTPUT_DIR
+    out_dir.mkdir(parents=True, exist_ok=True)
+    output = out_dir / f"{file_path.stem}_metadata.json"
     temp = output.with_suffix(".json.tmp")
     payload = json.dumps(metadata, indent=4, ensure_ascii=False)
     json.loads(payload)
@@ -138,7 +140,40 @@ def write_atomic(file_path: Path, metadata: dict) -> Path:
     return output
 
 
+def parse_single_file(source_path: str | Path, output_dir: Path | None = None) -> dict:
+    """Parse exactly one COBOL source file and persist its metadata."""
+    p = Path(source_path)
+    if not p.is_absolute():
+        p = (PROJECT_ROOT / p).resolve()
+    if not p.exists() or not p.is_file():
+        raise FileNotFoundError(f"COBOL source file not found: {p}")
+
+    metadata = parse_one(p)
+    write_atomic(p, metadata, output_dir=output_dir)
+    return metadata
+
+
 def main() -> None:
+    import argparse
+    parser = argparse.ArgumentParser(description="COBOL Parser (Single-File & Batch)")
+    parser.add_argument("--file", type=str, default="", help="Path to a single COBOL file to parse")
+    args = parser.parse_args()
+
+    if args.file:
+        file_path = Path(args.file)
+        try:
+            metadata = parse_single_file(file_path)
+            print(f"SUCCESS: {file_path.name}")
+            print(f"  Records: {len(metadata.get('records', []))}")
+            print(f"  Files: {len(metadata.get('files', []))}")
+            print(f"  Variables: {len(metadata.get('variables', []))}")
+            print(f"  Relationships: {len(metadata.get('relationships', []))}")
+        except Exception as error:
+            print(f"FAILED: {file_path.name}")
+            print(f"{type(error).__name__}: {error}")
+            sys.exit(1)
+        return
+
     files = sorted(BASE_DIR.glob("*.CBL"))
     print("=" * 80)
     print("COBOL BATCH PARSER - PYTHON 3.12 / 3.14 PARITY MODE")

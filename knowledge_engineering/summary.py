@@ -5,6 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, Iterable
 
+from .paths import PROJECT_ROOT
+
 
 def _bullets(items: Iterable[Any]) -> str:
     values = [str(item) for item in items if item is not None and str(item).strip()]
@@ -17,7 +19,11 @@ def _value(value: Any, default: str = "Not available") -> str:
     return str(value)
 
 
-def render_artifact_summary(review: Dict[str, Any], profile: Dict[str, Any] | None = None) -> str:
+def render_artifact_summary(
+    review: Dict[str, Any],
+    profile: Dict[str, Any] | None = None,
+    source_path: str | None = None,
+) -> str:
     """Render one artifact review as a stable, human-readable Markdown document."""
     profile = profile or {}
     identification = review.get("artifact_identification", {})
@@ -25,6 +31,7 @@ def render_artifact_summary(review: Dict[str, Any], profile: Dict[str, Any] | No
     execution = review.get("parser_execution", {})
 
     file_name = _value(identification.get("file_name"), review.get("artifact_id", "unknown"))
+    resolved_path = source_path or identification.get("source_path") or profile.get("source_path") or file_name
     source_type = _value(identification.get("source_type"), profile.get("source_type", "unknown"))
     artifact_kind = _value(identification.get("artifact_kind"), profile.get("artifact_kind", "unknown"))
     parser = _value(selection.get("parser"), "Not selected")
@@ -50,6 +57,7 @@ def render_artifact_summary(review: Dict[str, Any], profile: Dict[str, Any] | No
         "## Artifact Identity",
         "",
         f"- **Artifact ID:** {_value(review.get('artifact_id'))}",
+        f"- **Source Path:** {_value(resolved_path)}",
         f"- **Source type:** {source_type}",
         f"- **Artifact kind:** {artifact_kind}",
         f"- **Review status:** {review_status}",
@@ -102,6 +110,30 @@ def render_artifact_summary(review: Dict[str, Any], profile: Dict[str, Any] | No
     return "\n".join(lines)
 
 
+def write_single_summary(
+    artifact_id: str,
+    review: Dict[str, Any],
+    profile: Dict[str, Any] | None = None,
+    output_dir: Path | None = None,
+    source_path: str | None = None,
+) -> Path:
+    """Generate and write ONLY the summary document for the requested artifact."""
+    out_dir = output_dir or (PROJECT_ROOT / "output" / "knowledge" / "summaries")
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    identification = review.get("artifact_identification", {})
+    file_name = source_path or identification.get("file_name") or artifact_id
+    stem = Path(str(file_name)).stem
+    if stem.endswith("_metadata"):
+        stem = stem[:-9]
+    safe_name = stem.replace(" ", "_")
+
+    target = out_dir / f"{safe_name}_summary.md"
+    content = render_artifact_summary(review, profile, source_path=source_path)
+    target.write_text(content, encoding="utf-8")
+    return target
+
+
 def write_artifact_summaries(
     enrichment: Dict[str, Any],
     output_dir: Path,
@@ -115,7 +147,10 @@ def write_artifact_summaries(
         artifact_id = review.get("artifact_id", "unknown")
         identification = review.get("artifact_identification", {})
         file_name = identification.get("file_name") or artifact_id
-        safe_name = Path(str(file_name)).stem.replace(" ", "_")
+        stem = Path(str(file_name)).stem
+        if stem.endswith("_metadata"):
+            stem = stem[:-9]
+        safe_name = stem.replace(" ", "_")
         target = output_dir / f"{safe_name}_summary.md"
         target.write_text(
             render_artifact_summary(review, profiles.get(artifact_id)),

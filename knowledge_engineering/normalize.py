@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List
 
+from .paths import get_project_root, to_project_relative
 from .schema import Artifact, BusinessRule, Entity, Evidence, KnowledgeDocument, Relationship
 
 
@@ -45,15 +46,60 @@ def load_json(path: Path) -> Dict[str, Any]:
     return data
 
 
-def normalize_file(path: Path, source_type: str) -> KnowledgeDocument:
-    data = load_json(path)
-    artifact_id = stable_id("artifact", source_type, path.name)
+def infer_source_relative_path(
+    metadata_path: Path,
+    source_type: str,
+    project_root: Path | None = None,
+) -> str:
+    """Infer the original source relative path from parser output metadata file."""
+    stem = metadata_path.stem
+    if stem.endswith("_metadata"):
+        stem = stem[:-9]
+
+    root = project_root or get_project_root()
+
+    if source_type == "sql":
+        candidate = root / "source" / "sql" / f"{stem}.sql"
+        if candidate.exists():
+            return to_project_relative(candidate, root)
+        return f"source/sql/{stem}.sql"
+
+    if source_type == "cobol":
+        # Check .CBL, .cbl, .cob, .cpy
+        for ext in (".CBL", ".cbl", ".cob", ".cpy"):
+            candidate = root / "source" / "mainframe" / "cobol" / f"{stem}{ext}"
+            if candidate.exists():
+                return to_project_relative(candidate, root)
+        return f"source/mainframe/cobol/{stem}.CBL"
+
+    if source_type == "ssis":
+        candidate = root / "source" / "ssis" / "packages" / f"{stem}.dtsx"
+        if candidate.exists():
+            return to_project_relative(candidate, root)
+        return f"source/ssis/packages/{stem}.dtsx"
+
+    return to_project_relative(metadata_path, root, allow_outside=True)
+
+
+def normalize_source_metadata(
+    data: Dict[str, Any],
+    source_path: str | Path,
+    source_type: str,
+    project_root: Path | None = None,
+) -> KnowledgeDocument:
+    """Normalize extracted parser metadata dictionary against the authoritative source file path."""
+    root = project_root or get_project_root()
+    source_rel = to_project_relative(source_path, root, allow_outside=True)
+    source_filename = Path(source_rel).name
+    source_stem = Path(source_rel).stem
+
+    artifact_id = stable_id("artifact", source_type, source_rel)
 
     artifact = Artifact(
         id=artifact_id,
         source_type=source_type,
-        file_name=path.name,
-        path=str(path),
+        file_name=source_filename,
+        path=source_rel,
         metadata={"metadata_version": data.get("metadata_version")},
     )
 
@@ -63,7 +109,7 @@ def normalize_file(path: Path, source_type: str) -> KnowledgeDocument:
     business_rules: List[BusinessRule] = []
 
     def add_entity(entity_type: str, name: str, properties: Dict[str, Any] | None = None) -> str:
-        entity_id = stable_id("entity", source_type, path.name, entity_type, name)
+        entity_id = stable_id("entity", source_type, source_rel, entity_type, name)
         entities.append(
             Entity(
                 id=entity_id,
@@ -94,8 +140,8 @@ def normalize_file(path: Path, source_type: str) -> KnowledgeDocument:
 
     artifact_entity_id = add_entity(
         "ARTIFACT",
-        path.stem,
-        {"source_type": source_type, "file_name": path.name},
+        source_stem,
+        {"source_type": source_type, "file_name": source_filename, "source_path": source_rel},
     )
 
     if source_type == "sql":
@@ -127,7 +173,7 @@ def normalize_file(path: Path, source_type: str) -> KnowledgeDocument:
             )
 
     elif source_type == "cobol":
-        program_name = data.get("program_id") or path.stem
+        program_name = data.get("program_id") or source_stem
         program_id = add_entity("PROGRAM", str(program_name))
         add_relationship(artifact_entity_id, "DEFINES", program_id)
 
@@ -166,7 +212,7 @@ def normalize_file(path: Path, source_type: str) -> KnowledgeDocument:
                 add_relationship(src_id, rel_type, tgt_id)
 
     elif source_type == "ssis":
-        package_name = path.stem
+        package_name = source_stem
         package_id = add_entity("SSIS_PACKAGE", package_name)
         add_relationship(artifact_entity_id, "DEFINES", package_id)
 
@@ -218,3 +264,18 @@ def normalize_file(path: Path, source_type: str) -> KnowledgeDocument:
         evidence=evidence,
         business_rules=business_rules,
     )
+
+
+def normalize_file(
+    path: Path,
+    source_type: str,
+    source_path: str | Path | None = None,
+    project_root: Path | None = None,
+) -> KnowledgeDocument:
+    data = load_json(path)
+    if source_path is None:
+        source_rel = infer_source_relative_path(path, source_type, project_root)
+    else:
+        source_rel = to_project_relative(source_path, project_root, allow_outside=True)
+
+    return normalize_source_metadata(data, source_rel, source_type, project_root)

@@ -71,6 +71,19 @@ class KnowledgeChunker:
 
         return chunks
 
+    def build_artifact_chunks(self, canonical: Dict[str, Any], artifact_id: str) -> List[Dict[str, Any]]:
+        """Create chunks scoped strictly to one artifact."""
+        scoped_canonical = {
+            "artifacts": [a for a in canonical.get("artifacts", []) if a.get("artifact_id") == artifact_id or a.get("id") == artifact_id],
+            "entities": [e for e in canonical.get("entities", []) if e.get("artifact_id") == artifact_id],
+            "relationships": [r for r in canonical.get("relationships", []) if r.get("artifact_id") == artifact_id or r.get("source_artifact_id") == artifact_id],
+            "business_rules": [b for b in canonical.get("business_rules", []) if b.get("artifact_id") == artifact_id],
+            "claims": [c for c in canonical.get("claims", []) if c.get("artifact_id") == artifact_id],
+            "reference_matches": [m for m in canonical.get("reference_matches", []) if m.get("artifact_id") == artifact_id],
+            "knowledge_gaps": [g for g in canonical.get("knowledge_gaps", []) if g.get("artifact_id") == artifact_id],
+        }
+        return self.build_chunks(scoped_canonical)
+
     @staticmethod
     def _entity_text(entity: Dict[str, Any], artifact: Dict[str, Any]) -> str:
         properties = entity.get("properties") or {}

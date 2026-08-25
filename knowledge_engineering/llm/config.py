@@ -10,6 +10,7 @@ class LLMConfig:
     provider: str = "groq"
     model: str = "default-model"
     api_key: str = "default-key"
+    base_url: str = ""
     max_retries: int = 3
     base_delay: float = 1.0
     max_delay: float = 60.0
@@ -50,8 +51,14 @@ class LLMConfig:
             api_key = os.getenv("GEMINI_API_KEY", "").strip()
         elif not api_key and provider == "groq":
             api_key = os.getenv("GROQ_API_KEY", "").strip()
+        elif not api_key and provider == "nim":
+            api_key = os.getenv("NIM_API_KEY", "").strip() or os.getenv("NVIDIA_API_KEY", "").strip()
         if not provider or not model or not api_key:
             return None
+
+        base_url = os.getenv("LLM_BASE_URL", "").strip() or os.getenv("NIM_BASE_URL", "").strip()
+        if not base_url and provider == "nim":
+            base_url = "https://integrate.api.nvidia.com/v1"
 
         def _get_int(key: str, default: int) -> int:
             val = os.getenv(key)
@@ -81,6 +88,7 @@ class LLMConfig:
             provider=provider,
             model=model,
             api_key=api_key,
+            base_url=base_url,
             max_retries=_get_int("LLM_MAX_RETRIES", 3),
             base_delay=_get_float("LLM_BASE_DELAY", 1.0),
             max_delay=_get_float("LLM_MAX_DELAY", 60.0),

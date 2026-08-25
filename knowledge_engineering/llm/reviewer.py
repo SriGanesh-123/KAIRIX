@@ -114,11 +114,46 @@ recommended_action, action_owner, source_modified.
 
 def load_source(artifact: dict[str, Any]) -> str:
     path_value = artifact.get("path")
+    project_root = Path(__file__).resolve().parents[2]
     if not path_value:
         return "Original source path is not available in canonical metadata."
-    path = Path(path_value)
-    if not path.is_absolute():
-        path = Path(__file__).resolve().parents[2] / path
-    if not path.exists() or not path.is_file():
-        return f"Original source could not be loaded from: {path_value}"
-    return path.read_text(encoding="utf-8", errors="replace")[:40000]
+
+    raw_path = Path(path_value)
+    if not raw_path.is_absolute():
+        path = (project_root / raw_path).resolve()
+    else:
+        path = raw_path.resolve()
+
+    # If the path points directly to an existing source file (e.g. .sql, .CBL, .dtsx), read it
+    if path.exists() and path.is_file() and not path.name.endswith("_metadata.json"):
+        return path.read_text(encoding="utf-8", errors="replace")[:40000]
+
+    # If path pointed to a metadata json file or missing path, resolve to original source
+    stem = path.stem
+    if stem.endswith("_metadata"):
+        stem = stem[:-9]
+
+    source_type = (artifact.get("source_type") or "").lower()
+    candidates = []
+    if source_type == "sql":
+        candidates.append(project_root / "source" / "sql" / f"{stem}.sql")
+    elif source_type == "cobol":
+        for ext in (".CBL", ".cbl", ".cob", ".cpy"):
+            candidates.append(project_root / "source" / "mainframe" / "cobol" / f"{stem}{ext}")
+    elif source_type == "ssis":
+        candidates.append(project_root / "source" / "ssis" / "packages" / f"{stem}.dtsx")
+    else:
+        candidates.extend([
+            project_root / "source" / "sql" / f"{stem}.sql",
+            project_root / "source" / "mainframe" / "cobol" / f"{stem}.CBL",
+            project_root / "source" / "ssis" / "packages" / f"{stem}.dtsx",
+        ])
+
+    for candidate in candidates:
+        if candidate.exists() and candidate.is_file():
+            return candidate.read_text(encoding="utf-8", errors="replace")[:40000]
+
+    if path.exists() and path.is_file():
+        return path.read_text(encoding="utf-8", errors="replace")[:40000]
+
+    return f"Original source could not be loaded from: {path_value}"

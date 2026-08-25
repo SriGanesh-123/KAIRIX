@@ -35,6 +35,9 @@ def execute_parser(selection: dict[str, Any], project_root: Path, timeout: int =
 
     started = time.perf_counter()
     command = [sys.executable, "-m", entrypoint]
+    source_file = selection.get("source_path") or selection.get("file_name")
+    if source_file:
+        command.extend(["--file", str(source_file)])
     try:
         completed = subprocess.run(
             command,

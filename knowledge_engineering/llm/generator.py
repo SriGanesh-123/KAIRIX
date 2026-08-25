@@ -22,6 +22,7 @@ from .errors import (
     classify_exception,
 )
 from .gateway import InvestigationBudget, LLMGateway, _STRUCTURED_OUTPUT_SYSTEM_PROMPT
+from .nim import NIMGenerator
 
 T = TypeVar("T")
 
@@ -203,8 +204,18 @@ def create_generator(config: Any) -> LLMGateway:
             max_delay=max_delay,
             timeout=timeout,
         )
+    elif provider == "nim":
+        adapter = NIMGenerator(
+            api_key=config.api_key,
+            model=config.model,
+            base_url=getattr(config, "base_url", "") or "https://integrate.api.nvidia.com/v1",
+            max_retries=max_retries,
+            base_delay=base_delay,
+            max_delay=max_delay,
+            timeout=timeout,
+        )
     else:
-        raise ValueError(f"Unsupported LLM_PROVIDER={config.provider!r}. Supported providers: gemini, groq")
+        raise ValueError(f"Unsupported LLM_PROVIDER={config.provider!r}. Supported providers: gemini, groq, nim")
 
     return LLMGateway(adapter=adapter, config=config if isinstance(config, LLMConfig) else None)
 

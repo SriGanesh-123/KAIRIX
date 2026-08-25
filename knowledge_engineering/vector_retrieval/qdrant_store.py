@@ -97,6 +97,26 @@ class QdrantKnowledgeStore:
                 field_schema=schema,
             )
 
+    def delete_by_artifact_id(self, artifact_id: str) -> None:
+        self._require_client()
+        assert self.client is not None
+        if not artifact_id:
+            return
+        self.client.delete(
+            collection_name=self.collection_name,
+            points_selector=models.FilterSelector(
+                filter=models.Filter(
+                    must=[
+                        models.FieldCondition(
+                            key="artifact_id",
+                            match=models.MatchValue(value=str(artifact_id)),
+                        )
+                    ]
+                )
+            ),
+            wait=True,
+        )
+
     def upsert(
         self,
         chunks: Iterable[Dict[str, Any]],

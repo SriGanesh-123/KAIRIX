@@ -35,6 +35,17 @@ class VectorRetriever:
         vectors = self.embedder.embed([chunk["text"] for chunk in chunks])
         return self.store.upsert(chunks, vectors)
 
+    def delete_artifact(self, artifact_id: str) -> None:
+        self.store.delete_by_artifact_id(artifact_id)
+
+    def index_artifact(self, artifact_id: str, chunks: List[Dict[str, Any]]) -> int:
+        self.store.ensure_collection(self.embedder.dimension)
+        self.store.delete_by_artifact_id(artifact_id)
+        if not chunks:
+            return 0
+        vectors = self.embedder.embed([chunk["text"] for chunk in chunks])
+        return self.store.upsert(chunks, vectors)
+
     def search(
         self,
         query: str,

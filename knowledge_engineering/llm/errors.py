@@ -83,19 +83,23 @@ def extract_retry_after(exc: Exception) -> float | None:
     - HTTP response header 'Retry-After'
     - Text patterns like 'try again in 2.34s', 'retry after 3s', 'retry in 4.5 seconds'
     """
-    # 1. Try response header if present
+    # 1. Try response header or direct exception headers if present
+    headers = None
     response = getattr(exc, "response", None)
     if response is not None:
         headers = getattr(response, "headers", None)
-        if headers and hasattr(headers, "get"):
-            header_val = headers.get("retry-after") or headers.get("Retry-After")
-            if header_val:
-                try:
-                    val = float(header_val)
-                    if val > 0:
-                        return val
-                except (ValueError, TypeError):
-                    pass
+    if headers is None:
+        headers = getattr(exc, "headers", None)
+
+    if headers and hasattr(headers, "get"):
+        header_val = headers.get("retry-after") or headers.get("Retry-After")
+        if header_val:
+            try:
+                val = float(header_val)
+                if val > 0:
+                    return val
+            except (ValueError, TypeError):
+                pass
 
     # 2. Try regex extraction from string representation
     text = str(exc)
@@ -140,25 +144,28 @@ def classify_exception(exc: Exception, *, provider: str = "", model: str = "") -
     msg = str(exc)
     lowered = msg.lower()
     retry_after = extract_retry_after(exc)
+    status_code = getattr(exc, "status_code", None) or getattr(exc, "code", None)
+    if not isinstance(status_code, int):
+        status_code = None
 
     # Rate limits (429)
-    if "429" in msg or "rate_limit" in lowered or "rate limit" in lowered or "quota" in lowered or "tokens per minute" in lowered:
+    if status_code == 429 or "429" in msg or "rate_limit" in lowered or "rate limit" in lowered or "quota" in lowered or "tokens per minute" in lowered:
         return LLMRateLimitError(msg, retry_after=retry_after, provider=provider, model=model)
 
     # Auth failures (401 / 403 / invalid api key)
-    if "401" in msg or "403" in msg or "invalid api key" in lowered or "authentication" in lowered or "unauthorized" in lowered:
+    if status_code in (401, 403) or "401" in msg or "403" in msg or "invalid api key" in lowered or "authentication" in lowered or "unauthorized" in lowered:
         return LLMAuthError(msg, provider=provider, model=model)
 
     # Bad request / Prompt too large (400 / 413)
-    if "400" in msg or "413" in msg or "too large" in lowered or "context length" in lowered or "maximum context" in lowered:
+    if status_code in (400, 413) or "400" in msg or "413" in msg or "too large" in lowered or "context length" in lowered or "maximum context" in lowered:
         return LLMBadRequestError(msg, provider=provider, model=model)
 
     # Timeouts
-    if isinstance(exc, TimeoutError) or "timeout" in lowered or "timed out" in lowered or "deadline exceeded" in lowered:
+    if isinstance(exc, (TimeoutError, socket_timeout_types)) if (socket_timeout_types := getattr(exc, "_is_timeout", False)) else isinstance(exc, TimeoutError) or "timeout" in lowered or "timed out" in lowered or "deadline exceeded" in lowered:
         return LLMTimeoutError(msg, provider=provider, model=model)
 
     # Server errors (500 / 502 / 503 / 504)
-    if any(code in msg for code in ("500", "502", "503", "504")) or "internal server error" in lowered or "service unavailable" in lowered or "bad gateway" in lowered:
+    if (status_code is not None and 500 <= status_code <= 599) or any(code in msg for code in ("500", "502", "503", "504")) or "internal server error" in lowered or "service unavailable" in lowered or "bad gateway" in lowered:
         return LLMServerError(msg, provider=provider, model=model)
 
     # Empty response
